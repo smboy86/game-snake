@@ -1,22 +1,23 @@
-# Workflow
+# 작업 흐름
 
-Build a game in small steps and validate every change. Treat each iteration as: implement -> act -> pause -> observe -> adjust.
+게임은 작은 단계로 만들고, 모든 변경사항을 검증합니다.
+각 반복은 `구현 -> 실행 -> 잠시 멈춤 -> 관찰 -> 조정`의 흐름으로 다룹니다.
 
-Keep referring to `$GAME_ROOT/DESIGN-DOCUMENT.md` since this specifies the implementation details, the story, the logic, and the overall
-look and feel of the game.
+항상 `$GAME_ROOT/DESIGN-DOCUMENT.md`를 참고합니다.
+이 문서는 게임의 구현 세부사항, 스토리, 로직, 전체적인 룩앤필을 정의하는 기준 문서입니다.
 
-Initialize and keep up to date a development log inside `$GAME_ROOT/PROGRESS.md`; this should contain what works, what doesn't, TODOs, and key
-implementation decisions.
+`$GAME_ROOT/PROGRESS.md`에는 개발 로그를 만들고 계속 최신 상태로 유지합니다.
+이 문서에는 현재 작동하는 것, 작동하지 않는 것, TODO, 중요한 구현 결정사항을 기록합니다.
 
-The general workflow sequence should be as follows:
+일반적인 작업 순서는 다음과 같습니다.
 
-1. **Read the DESIGN-DOCUMENT.md.**. Understand what the game is trying to achieve and ensure the current implementation adheres to the design spec.
-2. **Pick a goal.** Define a single feature or behavior to implement.
-3. **Implement small.** Make the smallest change that moves the game forward.
-4. **Udate PROGRESS.md.** If `PROGRESS.md` exists, read it first and confirm the original user prompt is recorded at the top (prefix with `Original prompt:`). Also note any TODOs and suggestions left by the previous agent. If missing, create it and write `Original prompt: <prompt>` at the top before appending updates.
-5. **Dry-run the game loop.** Use any necessary tools to run or simulate the game loop with the latest implementation changes.
-6. **Inspect state.** Capture the state (logs, screenshots, outputs) during the dry-run.
-7. **Verify controls and state (multi-step focus).** Exhaustively exercise all important interactions. For each, think through the full multi-step sequence it implies (cause → intermediate states → outcome) and verify the entire chain works end-to-end. If anything is off, fix and rerun. Examples of important interactions: move, jump, shoot/attack, interact/use, select/confirm/cancel in menus, pause/resume, restart, and any special abilities or puzzle actions defined by the request. Multi-step examples: shooting an enemy should reduce its health; when health reaches 0 it should disappear and update the score; collecting a key should unlock a door and allow level progression.
-8. **Check errors.** Review console errors and fix the first new issue before continuing.
-9. **Reset between scenarios.** Avoid cross-test state when validating distinct features.
-10. **Iterate with small deltas.** Change one variable at a time (frames, inputs, timing, positions), then repeat steps 3-9 until stable.
+1. **`DESIGN-DOCUMENT.md`를 읽습니다.** 게임이 무엇을 달성하려는지 이해하고, 현재 구현이 설계 문서를 따르는지 확인합니다.
+2. **목표를 하나 고릅니다.** 구현할 단일 기능이나 동작을 정의합니다.
+3. **작게 구현합니다.** 게임을 한 걸음 앞으로 움직이는 가장 작은 변경을 만듭니다.
+4. **`PROGRESS.md`를 갱신합니다.** `PROGRESS.md`가 있다면 먼저 읽고, 문서 맨 위에 원래 사용자 요청이 `Original prompt:` 접두사와 함께 기록되어 있는지 확인합니다. 이전 에이전트가 남긴 TODO와 제안도 확인합니다. 문서가 없다면 새로 만들고 맨 위에 `Original prompt: <prompt>`를 쓴 뒤 진행 내용을 추가합니다.
+5. **게임 루프를 드라이런합니다.** 필요한 도구를 사용해 최신 구현 변경사항으로 게임을 실행하거나 시뮬레이션합니다.
+6. **상태를 관찰합니다.** 드라이런 중 로그, 스크린샷, 출력값 등 상태를 캡처합니다.
+7. **조작과 상태를 검증합니다.** 중요한 상호작용을 빠짐없이 실행해봅니다. 각 상호작용은 원인, 중간 상태, 결과까지 이어지는 전체 과정을 생각하고 끝까지 검증합니다. 문제가 있으면 수정하고 다시 실행합니다. 예: 이동, 점프, 발사/공격, 상호작용/사용, 메뉴 선택/확인/취소, 일시정지/재개, 재시작, 요청에 정의된 특수 능력이나 퍼즐 동작. 예를 들어 적을 공격하면 체력이 줄고, 체력이 0이 되면 사라지고 점수가 갱신되어야 합니다. 열쇠를 먹으면 문이 열리고 다음 레벨로 진행할 수 있어야 합니다.
+8. **오류를 확인합니다.** 콘솔 오류를 검토하고 새로 생긴 첫 번째 문제부터 수정합니다.
+9. **시나리오 사이에는 상태를 초기화합니다.** 서로 다른 기능 검증이 이전 테스트 상태에 영향을 받지 않게 합니다.
+10. **작은 차이로 반복합니다.** 프레임, 입력, 타이밍, 위치 같은 변수를 한 번에 하나씩 바꾸고, 안정화될 때까지 3-9단계를 반복합니다.

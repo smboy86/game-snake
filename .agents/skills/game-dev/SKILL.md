@@ -1,15 +1,15 @@
 ---
 name: "game-dev"
-description: "Used when building or iterating during a game development process."
+description: "게임 개발 과정에서 빌드, 구현, 반복 개선을 수행할 때 사용하는 스킬입니다."
 ---
 
-# Instructions
+# 지침
 
-This document serves as a high-level map for executing game development skills.
-Each set of skills is described in a dedicated `*.md` file as listed below:
+이 문서는 게임 개발 스킬을 실행하기 위한 최상위 안내서입니다.
+각 세부 지침은 아래의 전용 문서에 나뉘어 정의되어 있습니다.
 
-* `PREREQUISITES.md` specifies the environment configuration and any pre-requisites that need to be met; this is the first place we need to look at.
-* `WORKFLOW.md` describes the general game development workflow and should be referred to periodically as needed.
-* `GAME-ENGINE.md` documents the game engine and APIs; it may also simply refer to external documentation.
-* `ASSETS.md` describes how the various game assets and config should be used, i.e. sprites/atlas, tiles, backgrounds, sounds.
-* `TESTING.md` describes how the game shall be run/tested/evaluated.
+* `PREREQUISITES.md`는 개발 환경 구성과 사전 준비사항을 정의합니다. 작업을 시작할 때 가장 먼저 확인해야 합니다.
+* `WORKFLOW.md`는 일반적인 게임 개발 흐름을 설명합니다. 구현 중 주기적으로 다시 참고해야 합니다.
+* `GAME-ENGINE.md`는 게임 엔진과 관련 API를 설명합니다. 필요하면 외부 공식 문서 참고 방향도 포함합니다.
+* `ASSETS.md`는 스프라이트, 아틀라스, 타일, 배경, 사운드 등 게임 애셋과 설정 파일을 어떻게 사용해야 하는지 설명합니다.
+* `TESTING.md`는 게임을 실행, 테스트, 평가하는 방법을 정의합니다.

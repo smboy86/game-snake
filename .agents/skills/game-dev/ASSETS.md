@@ -1,6 +1,6 @@
-# Assets
+# 애셋
 
-The assets generally fall into the following structure:
+게임 애셋은 일반적으로 아래 구조를 따릅니다.
 
 ```
 assets/
@@ -17,51 +17,49 @@ assets/
   fonts/
 ```
 
-If the assets structure within `$GAME_ROOT/` directory does not follow the above then try
-to infer it on your own.
+`$GAME_ROOT/` 안의 애셋 구조가 위와 다르다면, 파일명과 사용 맥락을 보고 합리적으로 추론합니다.
 
-## Images and Backgrounds
+## 이미지와 배경
 
-These are typically `.png` files and are used as-is without any extraction.
-Backgrounds are typically just joined/repeated together left-to-right. There may be "far" backgrounds, and backgrounds closer to the player
-(e.g. columns or walls) that are overlayed on top of the far backgrounds. These may require different scaling and parallax effects.
-Backgrounds should **NOT** be joined/repeated vertically (up-down).
+이미지와 배경은 보통 `.png` 파일이며, 별도 추출 없이 그대로 사용합니다.
+배경은 일반적으로 왼쪽에서 오른쪽으로 이어 붙이거나 반복합니다.
+먼 배경과 플레이어 가까이에 있는 배경이 나뉠 수 있습니다. 예를 들어 기둥이나 벽은 먼 배경 위에 겹쳐 그릴 수 있습니다.
+이 경우 서로 다른 스케일링이나 패럴랙스 효과가 필요할 수 있습니다.
+배경은 위아래 방향으로 이어 붙이거나 반복하지 않습니다.
 
-Misc images contain menus, pause screens, instruction screens, game over screens, etc.
-Similar to backgrounds, these are used as-is, i.e. no specific extraction nor configuration is required.
+`misc` 이미지는 메뉴, 일시정지 화면, 안내 화면, 게임오버 화면 등에 사용합니다.
+배경과 마찬가지로 특별한 추출이나 설정 없이 그대로 사용하는 것을 기본으로 합니다.
 
-## Tilemaps and Tilesets
+## 타일맵과 타일셋
 
-Tilemaps consist of both `.png` files (in the `tiles/` folder) as well as corresponding JSON configuration files
-(in the `maps/` folder). The JSON configuration is a map export from Tiled Map Editor. It specifies the metadata
-in terms of the width and height of a level (in number of tiles), and tile size. It also provides an array of
-tile placements and various properties associated with the tiles, such as whether they are collidable (e.g. whether
-the player/NPCs can stand on them, or collide with them). This map should be used for level layout (superimposed on
-the backgrounds) and for guiding the placement of NPCs and player movement.
+타일맵은 `tiles/` 폴더의 `.png` 파일과 `maps/` 폴더의 JSON 설정 파일로 구성됩니다.
+JSON 설정은 Tiled Map Editor에서 내보낸 맵 데이터입니다.
+여기에는 레벨의 가로/세로 크기, 타일 크기, 타일 배치 배열, 타일별 속성이 들어갑니다.
+타일 속성에는 충돌 가능 여부가 포함될 수 있습니다. 예를 들어 플레이어나 NPC가 해당 타일 위에 설 수 있는지, 또는 부딪힐 수 있는지를 정의합니다.
+이 맵은 배경 위에 얹는 레벨 레이아웃으로 사용하고, NPC 배치와 플레이어 이동 범위를 결정하는 기준으로 삼습니다.
 
-- X-position
-- Y-position
-- Width (in pixels)
-- Height (in pixels)
-- Whether the tile is "collidable", i.e. whether the player, enemies and NPCs can "stand" on the tile, or
-  bump into the tile
-- Description specifying any other details important to consider during the game implementation
+- X 위치
+- Y 위치
+- 너비, 픽셀 단위
+- 높이, 픽셀 단위
+- 충돌 가능 여부. 플레이어, 적, NPC가 해당 타일 위에 설 수 있는지 또는 부딪히는지
+- 구현 시 고려해야 할 기타 세부 설명
 
 
-## Spritesheets
+## 스프라이트시트
 
-Spritesheets consist of both `.png` files as well as corresponding JSON configuration files.
-The JSON configuration specifies different sprite movements/frames and their properties. The properties include:
+스프라이트시트는 `.png` 파일과 그에 대응하는 JSON 설정 파일로 구성됩니다.
+JSON 설정은 여러 스프라이트 동작, 프레임, 속성을 정의합니다. 속성에는 아래 항목이 포함됩니다.
 
-- X-position
-- Y-position
-- Width (in pixels)
-- Height (in pixels)
+- X 위치
+- Y 위치
+- 너비, 픽셀 단위
+- 높이, 픽셀 단위
 
-The sprite frame name identifies the type of sprite, the movement, and the sequence number. E.g. "player-jump-0" means
-it's a player jump sequence, first frame.
+스프라이트 프레임 이름은 스프라이트 종류, 동작, 순서 번호를 식별합니다.
+예를 들어 `"player-jump-0"`은 플레이어 점프 동작의 첫 번째 프레임을 뜻합니다.
 
-Example:
+예시:
 
 ```json
 ...
@@ -70,12 +68,12 @@ Example:
 ...
 ```
 
-## Fonts
+## 폰트
 
-Use the fonts in the `assets/fonts` folder.
+`assets/fonts` 폴더의 폰트를 사용합니다.
 
-## Audio
+## 오디오
 
-Audio is split into sound effects (`sfx/` directory) and music (`music/` directory).
-The sfx should be named accordingly (e.g. "hurt", "kill", "jump", etc), if not try to infer based on `DESIGN-DOCUMENT.md` or
-developer instructions.
+오디오는 효과음(`sfx/`)과 음악(`music/`)으로 나눕니다.
+효과음은 `hurt`, `kill`, `jump`처럼 용도에 맞게 이름이 붙어 있어야 합니다.
+이름만으로 용도를 알기 어렵다면 `DESIGN-DOCUMENT.md`나 개발 지침을 기준으로 추론합니다.
