@@ -7,10 +7,8 @@
     "userInterfaceStyle": "light",
     "platforms": ["android"],
     "android": {
-      "package": "com.smboy86.gamesnake",
-      "edgeToEdgeEnabled": true
+      "package": "com.smboy86.gamesnake"
     },
-    "plugins": ["expo-dev-client"],
     "extra": {
       "gameRuntime": "webview"
     }

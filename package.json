@@ -9,6 +9,7 @@
   },
   "scripts": {
     "android": "npm run game:bundle && expo run:android",
+    "eas-build-pre-install": "npm run game:bundle",
     "expo:start": "npm run game:bundle && expo start",
     "game:bundle": "node scripts/bundle-game-html.mjs",
     "serve": "python3 -m http.server 8000",
@@ -21,8 +22,8 @@
   },
   "dependencies": {
     "expo": "^55.0.19",
-    "expo-dev-client": "~55.0.30",
     "expo-status-bar": "^55.0.5",
+    "expo-system-ui": "~55.0.16",
     "phaser": "3.86.0",
     "react": "19.2.0",
     "react-native": "0.83.6",

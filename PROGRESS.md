@@ -29,6 +29,8 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - `app.json`, `eas.json`, `App.tsx`, `tsconfig.json`을 추가했습니다.
 - Expo SDK 55 호환성 체크에서 의존성이 최신 상태임을 확인했습니다.
 - Android platform 대상으로 `npx expo export`를 실행해 Metro 번들링을 확인했습니다.
+- `expo-dev-client`를 제거하고 standalone 성격의 release APK 빌드를 생성했습니다.
+- 로컬 Gradle `assembleRelease`가 성공했고 APK 서명 검증도 통과했습니다.
 
 ## Not Working
 
@@ -43,6 +45,7 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - Playwright 테스트 시나리오를 npm script로 더 세분화합니다.
 - 실제 Android 기기에서 `npm run expo:start` 후 QR 실행을 확인합니다.
 - EAS development build로 Android `.apk` 설치 테스트를 확인합니다.
+- Android 실기기 연결 후 생성된 APK 설치와 실제 플레이를 확인합니다.
 
 ## Decisions
 
@@ -65,3 +68,4 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - Android 모바일 실행은 Expo WebView 래핑 방식으로 진행합니다.
 - Expo WebView는 generated HTML을 로드하며, Phaser는 로컬 vendored 파일을 번들에 inline 합니다.
 - Expo SDK 55 실행에는 Node.js `>=20.19.4`를 사용합니다.
+- 로컬 Gradle APK는 debug certificate로 서명되며, 실기기 테스트용 설치 APK로 사용합니다.
