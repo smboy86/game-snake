@@ -1,0 +1,13 @@
+{
+  "name": "game-snake",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "test:game": "node --experimental-default-type=module /Users/devpoi/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js --url http://127.0.0.1:8000 --actions-file test-actions.json --iterations 4 --pause-ms 120 --screenshot-dir output/web-game"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}
