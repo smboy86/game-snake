@@ -1,7 +1,8 @@
-const FIELD_COLS = 100;
-const FIELD_ROWS = 100;
+const FIELD_COLS = 50;
+const FIELD_ROWS = 50;
 const CELL_SIZE = 16;
 const MOVE_INTERVAL_MS = 200;
+const APPLE_EAT_RADIUS_CELLS = 3;
 const BASE_BODY_SIZE = 12;
 const BODY_GROWTH_PER_LEVEL = 1;
 const MAX_BODY_SIZE = 26;
@@ -24,8 +25,8 @@ const state = {
   pendingDirection: DIRECTIONS.right,
   moveAccumulator: 0,
   bounceTimer: 0,
-  segments: [{ x: 50, y: 50 }],
-  apple: { x: 58, y: 50 },
+  segments: [{ x: 25, y: 25 }],
+  apple: { x: 31, y: 25 },
   lastEvent: "started",
 };
 
@@ -39,20 +40,8 @@ function keyOf(cell) {
   return `${cell.x},${cell.y}`;
 }
 
-function reverseDirection(direction) {
-  return {
-    x: -direction.x,
-    y: -direction.y,
-    label: direction.label.startsWith("up")
-      ? direction.label.replace("up", "down")
-      : direction.label.startsWith("down")
-        ? direction.label.replace("down", "up")
-        : direction.label === "left"
-          ? "right"
-          : direction.label === "right"
-            ? "left"
-            : `${-direction.x},${-direction.y}`,
-  };
+function directionByVector(x, y) {
+  return Object.values(DIRECTIONS).find((direction) => direction.x === x && direction.y === y) || DIRECTIONS.right;
 }
 
 function directionFromTouch(localX, localY, width, height) {
@@ -68,6 +57,72 @@ function directionFromTouch(localX, localY, width, height) {
 
 function isInsideField(cell) {
   return cell.x >= 0 && cell.x < FIELD_COLS && cell.y >= 0 && cell.y < FIELD_ROWS;
+}
+
+function isOccupiedByBody(cell) {
+  return state.segments.slice(1).some((segment) => segment.x === cell.x && segment.y === cell.y);
+}
+
+function isSafeCell(cell) {
+  return isInsideField(cell) && !isOccupiedByBody(cell);
+}
+
+function appleDistanceFromHead() {
+  const head = state.segments[0];
+  return Math.hypot(head.x - state.apple.x, head.y - state.apple.y);
+}
+
+function isAppleInEatRange() {
+  return appleDistanceFromHead() <= APPLE_EAT_RADIUS_CELLS;
+}
+
+function randomSafeDirection(head) {
+  const safeDirections = Object.values(DIRECTIONS).filter((direction) => {
+    const next = { x: head.x + direction.x, y: head.y + direction.y };
+    return isSafeCell(next);
+  });
+  if (!safeDirections.length) return null;
+  return safeDirections[Math.floor(Math.random() * safeDirections.length)];
+}
+
+function reflectFromWall(direction, next) {
+  let reflectedX = direction.x;
+  let reflectedY = direction.y;
+  if (next.x < 0 || next.x >= FIELD_COLS) reflectedX *= -1;
+  if (next.y < 0 || next.y >= FIELD_ROWS) reflectedY *= -1;
+  return directionByVector(reflectedX, reflectedY);
+}
+
+function reflectFromBody(direction, head, collidedSegment) {
+  let reflectedX = direction.x;
+  let reflectedY = direction.y;
+  if (collidedSegment.x !== head.x) reflectedX *= -1;
+  if (collidedSegment.y !== head.y) reflectedY *= -1;
+  return directionByVector(reflectedX, reflectedY);
+}
+
+function resolveBounce(head, reflectedDirection, eventName) {
+  let finalDirection = reflectedDirection;
+  let finalEvent = eventName;
+  let next = { x: head.x + finalDirection.x, y: head.y + finalDirection.y };
+
+  if (!isSafeCell(next)) {
+    const randomDirection = randomSafeDirection(head);
+    if (!randomDirection) {
+      state.bounceTimer = 220;
+      state.lastEvent = `${eventName}-blocked`;
+      return null;
+    }
+    finalDirection = randomDirection;
+    finalEvent = `${eventName}-random`;
+    next = { x: head.x + finalDirection.x, y: head.y + finalDirection.y };
+  }
+
+  state.direction = finalDirection;
+  state.pendingDirection = finalDirection;
+  state.bounceTimer = 220;
+  state.lastEvent = finalEvent;
+  return next;
 }
 
 function placeApple() {
@@ -95,44 +150,24 @@ function growToLevel() {
   }
 }
 
-function bounceFromSelf() {
-  state.segments.reverse();
-  state.direction = reverseDirection(state.direction);
-  state.pendingDirection = state.direction;
-  state.bounceTimer = 220;
-  state.lastEvent = "body-bounce";
-}
-
-function bounceFromWall() {
-  const reversed = reverseDirection(state.direction);
-  state.direction = reversed;
-  state.pendingDirection = reversed;
-  state.bounceTimer = 220;
-  state.lastEvent = "wall-bounce";
-}
-
 function moveSnakeOneCell() {
   state.direction = state.pendingDirection;
   const head = state.segments[0];
   let next = { x: head.x + state.direction.x, y: head.y + state.direction.y };
 
   if (!isInsideField(next)) {
-    bounceFromWall();
-    next = {
-      x: Phaser.Math.Clamp(head.x + state.direction.x, 0, FIELD_COLS - 1),
-      y: Phaser.Math.Clamp(head.y + state.direction.y, 0, FIELD_ROWS - 1),
-    };
+    next = resolveBounce(head, reflectFromWall(state.direction, next), "wall-bounce");
+    if (!next) return;
   }
 
-  const bodyWithoutTail = state.segments.slice(0, Math.max(1, state.segments.length - 1));
-  if (bodyWithoutTail.some((segment) => segment.x === next.x && segment.y === next.y)) {
-    bounceFromSelf();
-    return;
+  const collidedSegment = state.segments.slice(1).find((segment) => segment.x === next.x && segment.y === next.y);
+  if (collidedSegment) {
+    next = resolveBounce(head, reflectFromBody(state.direction, head, collidedSegment), "body-bounce");
+    if (!next) return;
   }
 
   state.segments.unshift(next);
-  const ateApple = next.x === state.apple.x && next.y === state.apple.y;
-  if (ateApple) {
+  if (isAppleInEatRange()) {
     state.applesEaten += 1;
     state.level += 1;
     state.lastEvent = "apple";
@@ -167,6 +202,8 @@ function renderGameToText() {
     coordinateSystem: "grid origin top-left; x right, y down; viewport keeps snake head at screen center",
     mode: state.mode,
     field: { cols: FIELD_COLS, rows: FIELD_ROWS },
+    appleEatRadiusCells: APPLE_EAT_RADIUS_CELLS,
+    appleDistanceCells: Number(appleDistanceFromHead().toFixed(2)),
     level: state.level,
     length: state.segments.length,
     bodySize: bodySize(),
