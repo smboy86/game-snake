@@ -2,12 +2,30 @@
   "name": "game-snake",
   "version": "0.1.0",
   "private": true,
+  "main": "expo/AppEntry",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.4"
+  },
   "scripts": {
+    "android": "npm run game:bundle && expo run:android",
+    "expo:start": "npm run game:bundle && expo start",
+    "game:bundle": "node scripts/bundle-game-html.mjs",
     "serve": "python3 -m http.server 8000",
     "test:game": "node --experimental-default-type=module /Users/devpoi/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js --url http://127.0.0.1:8000 --actions-file test-actions.json --iterations 4 --pause-ms 120 --screenshot-dir output/web-game"
   },
   "devDependencies": {
-    "playwright": "^1.59.1"
+    "@types/react": "^19.2.14",
+    "playwright": "^1.59.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "expo": "^55.0.19",
+    "expo-dev-client": "~55.0.30",
+    "expo-status-bar": "^55.0.5",
+    "phaser": "3.86.0",
+    "react": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-webview": "13.16.0"
   }
 }

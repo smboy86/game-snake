@@ -206,6 +206,29 @@
 - Playwright 또는 유사 도구로 기본 게임 루프를 검증할 수 있어야 합니다.
 - 개발 지침은 `.agents/skills/game-dev` 문서를 따릅니다.
 
+## 13.1 Expo Android WebView 실행
+
+Android 모바일 기기 실행은 Expo 앱 안에서 현재 Phaser 웹 게임을 `react-native-webview`로 감싸는 방식을 사용합니다.
+
+실행 구조:
+
+- `App.tsx`는 전체 화면 `WebView`를 렌더링합니다.
+- `scripts/bundle-game-html.mjs`는 `vendor/phaser.min.js`, `styles.css`, `main.js`를 하나의 HTML 문자열로 묶습니다.
+- 생성된 `src/generated/gameHtml.ts`를 WebView의 `source.html`로 전달합니다.
+- Phaser는 CDN이 아니라 로컬 `vendor/phaser.min.js`를 사용해 Android에서도 네트워크 없이 실행될 수 있게 합니다.
+
+개발 명령:
+
+- `npm run game:bundle`: WebView용 HTML 번들을 생성합니다.
+- `npm run expo:start`: 번들을 생성한 뒤 Expo 개발 서버를 시작합니다.
+- `npm run android`: 번들을 생성한 뒤 Android 기기 또는 에뮬레이터에 실행합니다.
+
+설치형 Android 테스트:
+
+- EAS development build는 `eas.json`의 `development` profile을 사용합니다.
+- Android 실기기에 직접 설치하려면 `.aab`가 아니라 `.apk`가 필요하므로 development/preview profile은 `android.buildType: "apk"`를 사용합니다.
+- Expo SDK 55 기준 로컬 Node.js는 `>=20.19.4`가 필요합니다.
+
 ## 14. 첫 번째 마일스톤
 
 최소 플레이 가능 버전에서 반드시 구현할 것:

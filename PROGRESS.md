@@ -23,6 +23,12 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 대각선 벽 충돌이 `down-right`에서 `up-left`로 반사되는 것을 확인했습니다.
 - 꼬리 충돌이 반사각 규칙을 따라 `right`에서 `left`로 반사되는 것을 확인했습니다.
 - 반사 위치가 막힌 꼬리 충돌에서 `body-bounce-random`으로 안전 방향이 선택되는 것을 확인했습니다.
+- Expo + `react-native-webview` 기반 Android 실행 껍데기를 추가했습니다.
+- `scripts/bundle-game-html.mjs`로 Phaser, CSS, 게임 JS를 단일 HTML 문자열로 묶어 `src/generated/gameHtml.ts`를 생성하도록 했습니다.
+- Phaser CDN 의존을 제거하고 로컬 `vendor/phaser.min.js`를 사용하도록 바꿨습니다.
+- `app.json`, `eas.json`, `App.tsx`, `tsconfig.json`을 추가했습니다.
+- Expo SDK 55 호환성 체크에서 의존성이 최신 상태임을 확인했습니다.
+- Android platform 대상으로 `npx expo export`를 실행해 Metro 번들링을 확인했습니다.
 
 ## Not Working
 
@@ -35,6 +41,8 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 사과를 플레이어 근처에 생성할지 전체 필드 랜덤으로 둘지 추가 결정합니다.
 - 벽 충돌 피드백을 더 명확하게 만들지 검토합니다.
 - Playwright 테스트 시나리오를 npm script로 더 세분화합니다.
+- 실제 Android 기기에서 `npm run expo:start` 후 QR 실행을 확인합니다.
+- EAS development build로 Android `.apk` 설치 테스트를 확인합니다.
 
 ## Decisions
 
@@ -54,3 +62,6 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 벽 충돌은 벽 축 기준으로 진행 방향을 반사합니다.
 - 꼬리 충돌은 충돌한 꼬리 칸과 진행 방향을 기준으로 방향을 반사합니다.
 - 반사 후 다음 위치가 막혀 있으면 안전한 8방향 중 하나를 랜덤 선택합니다.
+- Android 모바일 실행은 Expo WebView 래핑 방식으로 진행합니다.
+- Expo WebView는 generated HTML을 로드하며, Phaser는 로컬 vendored 파일을 번들에 inline 합니다.
+- Expo SDK 55 실행에는 Node.js `>=20.19.4`를 사용합니다.

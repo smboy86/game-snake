@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Snake Game",
+    "slug": "game-snake",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.smboy86.gamesnake",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-dev-client"],
+    "extra": {
+      "gameRuntime": "webview"
+    }
+  }
+}

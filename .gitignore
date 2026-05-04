@@ -1,3 +1,5 @@
 node_modules/
 output/
+.expo/
+dist/
 .DS_Store
