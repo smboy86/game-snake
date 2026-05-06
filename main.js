@@ -23,6 +23,12 @@ const state = {
   applesEaten: 0,
   direction: DIRECTIONS.right,
   pendingDirection: DIRECTIONS.right,
+  pointerControl: {
+    active: false,
+    pointerId: null,
+    x: 0,
+    y: 0,
+  },
   moveAccumulator: 0,
   bounceTimer: 0,
   segments: [{ x: 25, y: 25 }],
@@ -53,6 +59,17 @@ function directionFromTouch(localX, localY, width, height) {
   const sy = dy > deadZone ? 1 : dy < -deadZone ? -1 : 0;
   const found = Object.values(DIRECTIONS).find((direction) => direction.x === sx && direction.y === sy);
   return found || null;
+}
+
+function applyPointerDirection(pointer, width, height) {
+  const direction = directionFromTouch(pointer.x, pointer.y, width, height);
+  state.pointerControl.x = pointer.x;
+  state.pointerControl.y = pointer.y;
+
+  if (direction) {
+    state.pendingDirection = direction;
+    state.lastEvent = `drag-${direction.label}`;
+  }
 }
 
 function isInsideField(cell) {
@@ -236,11 +253,23 @@ class SnakeScene extends Phaser.Scene {
       color: "#38513c",
     }).setScrollFactor(0);
     this.input.on("pointerdown", (pointer) => {
-      const direction = directionFromTouch(pointer.x, pointer.y, this.scale.width, this.scale.height);
-      if (direction) {
-        state.pendingDirection = direction;
-        state.lastEvent = `turn-${direction.label}`;
-      }
+      state.pointerControl.active = true;
+      state.pointerControl.pointerId = pointer.id;
+      applyPointerDirection(pointer, this.scale.width, this.scale.height);
+    });
+    this.input.on("pointermove", (pointer) => {
+      if (!state.pointerControl.active || state.pointerControl.pointerId !== pointer.id) return;
+      applyPointerDirection(pointer, this.scale.width, this.scale.height);
+    });
+    this.input.on("pointerup", (pointer) => {
+      if (state.pointerControl.pointerId !== pointer.id) return;
+      state.pointerControl.active = false;
+      state.pointerControl.pointerId = null;
+    });
+    this.input.on("pointerupoutside", (pointer) => {
+      if (state.pointerControl.pointerId !== pointer.id) return;
+      state.pointerControl.active = false;
+      state.pointerControl.pointerId = null;
     });
     this.scale.on("resize", () => this.draw());
     this.draw();
@@ -279,14 +308,6 @@ class SnakeScene extends Phaser.Scene {
     this.graphics.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
   }
 
-  drawTouchZones(width, height) {
-    this.graphics.lineStyle(1, 0x7e9b82, 0.25);
-    this.graphics.lineBetween(width / 3, 0, width / 3, height);
-    this.graphics.lineBetween((width / 3) * 2, 0, (width / 3) * 2, height);
-    this.graphics.lineBetween(0, height / 3, width, height / 3);
-    this.graphics.lineBetween(0, (height / 3) * 2, width, (height / 3) * 2);
-  }
-
   draw() {
     const width = this.scale.width;
     const height = this.scale.height;
@@ -296,7 +317,12 @@ class SnakeScene extends Phaser.Scene {
     this.graphics.fillStyle(0xeef2dd, 1);
     this.graphics.fillRect(0, 0, width, height);
     this.drawGrid(width, height);
-    this.drawTouchZones(width, height);
+    if (state.pointerControl.active) {
+      this.graphics.lineStyle(3, 0x224f2c, 0.5);
+      this.graphics.lineBetween(width / 2, height / 2, state.pointerControl.x, state.pointerControl.y);
+      this.graphics.fillStyle(0x224f2c, 0.2);
+      this.graphics.fillCircle(state.pointerControl.x, state.pointerControl.y, Math.max(14, size * 0.9));
+    }
 
     const apple = worldToScreen(state.apple, width, height);
     this.graphics.fillStyle(0xd94343, 1);
@@ -318,7 +344,7 @@ class SnakeScene extends Phaser.Scene {
 
     this.hudText.setText(`Lv ${state.level}  Length ${state.segments.length}  Apples ${state.applesEaten}`);
     this.hintText.setY(height - 34);
-    this.hintText.setText("화면 방향 터치로 8방향 이동");
+    this.hintText.setText("손가락이나 마우스를 누른 채 드래그해서 방향 조절");
   }
 }
 
