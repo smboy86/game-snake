@@ -38,6 +38,142 @@ const state = {
 
 let sceneRef = null;
 
+const audioState = {
+  context: null,
+  masterGain: null,
+  musicGain: null,
+  sfxGain: null,
+  musicTimer: null,
+  step: 0,
+  enabled: false,
+  started: false,
+  nextNoteTime: 0,
+};
+
+function createGainNode(context, target, value) {
+  const gain = context.createGain();
+  gain.gain.value = value;
+  gain.connect(target);
+  return gain;
+}
+
+function ensureAudioContext() {
+  if (audioState.context) return audioState.context;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  const context = new AudioContextClass();
+  audioState.masterGain = createGainNode(context, context.destination, 0.72);
+  audioState.musicGain = createGainNode(context, audioState.masterGain, 0.18);
+  audioState.sfxGain = createGainNode(context, audioState.masterGain, 0.38);
+  audioState.context = context;
+  return context;
+}
+
+function playTone({ frequency, startTime, duration, type = "sine", gain = 0.2, target = audioState.sfxGain }) {
+  const context = audioState.context;
+  if (!context || !target) return;
+
+  const oscillator = context.createOscillator();
+  const envelope = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+  envelope.gain.setValueAtTime(0.0001, startTime);
+  envelope.gain.exponentialRampToValueAtTime(gain, startTime + 0.018);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  oscillator.connect(envelope);
+  envelope.connect(target);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.04);
+}
+
+function scheduleMusicSlice() {
+  const context = audioState.context;
+  if (!context || !audioState.musicGain) return;
+
+  const melody = [392, 440, 523.25, 440, 392, 329.63, 349.23, 392];
+  const bass = [130.81, 130.81, 174.61, 174.61, 146.83, 146.83, 196, 196];
+  const stepDuration = 0.32;
+  const lookAhead = 0.7;
+
+  while (audioState.nextNoteTime < context.currentTime + lookAhead) {
+    const step = audioState.step;
+    const melodyFrequency = melody[step % melody.length];
+    const bassFrequency = bass[Math.floor(step / 2) % bass.length];
+    playTone({
+      frequency: melodyFrequency,
+      startTime: audioState.nextNoteTime,
+      duration: 0.24,
+      type: "triangle",
+      gain: step % 4 === 0 ? 0.16 : 0.11,
+      target: audioState.musicGain,
+    });
+    if (step % 2 === 0) {
+      playTone({
+        frequency: bassFrequency,
+        startTime: audioState.nextNoteTime,
+        duration: 0.52,
+        type: "sine",
+        gain: 0.08,
+        target: audioState.musicGain,
+      });
+    }
+    audioState.step += 1;
+    audioState.nextNoteTime += stepDuration;
+  }
+}
+
+async function startGameAudio() {
+  const context = ensureAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") {
+    await context.resume();
+  }
+  audioState.enabled = true;
+
+  if (audioState.started) return;
+  audioState.started = true;
+  audioState.nextNoteTime = context.currentTime + 0.05;
+  scheduleMusicSlice();
+  audioState.musicTimer = window.setInterval(scheduleMusicSlice, 180);
+}
+
+function playAppleSound() {
+  const context = ensureAudioContext();
+  if (!context || context.state !== "running") return;
+  const now = context.currentTime;
+  [659.25, 880, 1174.66].forEach((frequency, index) => {
+    playTone({
+      frequency,
+      startTime: now + index * 0.055,
+      duration: 0.22,
+      type: "triangle",
+      gain: 0.22 - index * 0.04,
+      target: audioState.sfxGain,
+    });
+  });
+  playTone({
+    frequency: 1760,
+    startTime: now + 0.16,
+    duration: 0.12,
+    type: "sine",
+    gain: 0.08,
+    target: audioState.sfxGain,
+  });
+}
+
+function pauseAudio() {
+  if (audioState.context && audioState.context.state === "running") {
+    audioState.context.suspend();
+  }
+}
+
+function resumeAudio() {
+  if (audioState.enabled && audioState.context && audioState.context.state === "suspended") {
+    audioState.nextNoteTime = audioState.context.currentTime + 0.05;
+    audioState.context.resume();
+  }
+}
+
 function bodySize() {
   return Math.min(MAX_BODY_SIZE, BASE_BODY_SIZE + (state.level - 1) * BODY_GROWTH_PER_LEVEL);
 }
@@ -188,6 +324,7 @@ function moveSnakeOneCell() {
     state.applesEaten += 1;
     state.level += 1;
     state.lastEvent = "apple";
+    playAppleSound();
     growToLevel();
     placeApple();
   } else {
@@ -253,6 +390,7 @@ class SnakeScene extends Phaser.Scene {
       color: "#38513c",
     }).setScrollFactor(0);
     this.input.on("pointerdown", (pointer) => {
+      startGameAudio();
       state.pointerControl.active = true;
       state.pointerControl.pointerId = pointer.id;
       applyPointerDirection(pointer, this.scale.width, this.scale.height);
@@ -370,3 +508,12 @@ window.advanceTime = (ms) => {
   if (sceneRef) sceneRef.manualAdvance(ms);
 };
 window.__snake_state = state;
+window.__snake_audio = audioState;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseAudio();
+  } else {
+    resumeAudio();
+  }
+});

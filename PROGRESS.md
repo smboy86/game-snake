@@ -31,6 +31,9 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - Android platform 대상으로 `npx expo export`를 실행해 Metro 번들링을 확인했습니다.
 - `expo-dev-client`를 제거하고 standalone 성격의 release APK 빌드를 생성했습니다.
 - 로컬 Gradle `assembleRelease`가 성공했고 APK 서명 검증도 통과했습니다.
+- Web Audio 기반 절차적 BGM과 사과 획득 효과음을 추가했습니다.
+- BGM은 첫 터치/포인터 입력 이후 시작되며, 앱이 백그라운드로 가면 일시정지하고 복귀 시 재개합니다.
+- 사과를 먹는 순간 상승형 차임 효과음이 재생됩니다.
 
 ## Not Working
 
@@ -46,6 +49,7 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 실제 Android 기기에서 `npm run expo:start` 후 QR 실행을 확인합니다.
 - EAS development build로 Android `.apk` 설치 테스트를 확인합니다.
 - Android 실기기 연결 후 생성된 APK 설치와 실제 플레이를 확인합니다.
+- 실제 모바일 기기에서 오디오 자동재생 정책과 볼륨 밸런스를 확인합니다.
 
 ## Decisions
 
@@ -69,3 +73,4 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - Expo WebView는 generated HTML을 로드하며, Phaser는 로컬 vendored 파일을 번들에 inline 합니다.
 - Expo SDK 55 실행에는 Node.js `>=20.19.4`를 사용합니다.
 - 로컬 Gradle APK는 debug certificate로 서명되며, 실기기 테스트용 설치 APK로 사용합니다.
+- 오디오는 외부 파일 대신 `main.js` 안의 Web Audio 신시사이저로 생성해 WebView HTML 번들에서도 별도 asset 경로 없이 동작하게 합니다.
