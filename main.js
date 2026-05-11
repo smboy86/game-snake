@@ -10,6 +10,7 @@ const BODY_GROWTH_PER_LEVEL = 1;
 const MAX_BODY_SIZE = 26;
 const MAX_UPDATE_STEP_MS = 1000 / 60;
 const TWO_PI = Math.PI * 2;
+const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
 
 const state = {
   mode: "playing",
@@ -38,11 +39,11 @@ const audioState = {
   masterGain: null,
   musicGain: null,
   sfxGain: null,
-  musicTimer: null,
-  step: 0,
+  musicElement: null,
+  musicSource: null,
+  musicError: null,
   enabled: false,
   started: false,
-  nextNoteTime: 0,
 };
 
 function createGainNode(context, target, value) {
@@ -64,6 +65,21 @@ function ensureAudioContext() {
   return context;
 }
 
+function ensureMusicElement(context) {
+  if (audioState.musicElement) return audioState.musicElement;
+  if (!BGM_SOURCE || !audioState.musicGain) return null;
+
+  const music = new Audio(BGM_SOURCE);
+  music.loop = true;
+  music.preload = "auto";
+  music.volume = 1;
+
+  audioState.musicSource = context.createMediaElementSource(music);
+  audioState.musicSource.connect(audioState.musicGain);
+  audioState.musicElement = music;
+  return music;
+}
+
 function playTone({ frequency, startTime, duration, type = "sine", gain = 0.2, target = audioState.sfxGain }) {
   const context = audioState.context;
   if (!context || !target) return;
@@ -81,42 +97,6 @@ function playTone({ frequency, startTime, duration, type = "sine", gain = 0.2, t
   oscillator.stop(startTime + duration + 0.04);
 }
 
-function scheduleMusicSlice() {
-  const context = audioState.context;
-  if (!context || !audioState.musicGain) return;
-
-  const melody = [392, 440, 523.25, 440, 392, 329.63, 349.23, 392];
-  const bass = [130.81, 130.81, 174.61, 174.61, 146.83, 146.83, 196, 196];
-  const stepDuration = 0.32;
-  const lookAhead = 0.7;
-
-  while (audioState.nextNoteTime < context.currentTime + lookAhead) {
-    const step = audioState.step;
-    const melodyFrequency = melody[step % melody.length];
-    const bassFrequency = bass[Math.floor(step / 2) % bass.length];
-    playTone({
-      frequency: melodyFrequency,
-      startTime: audioState.nextNoteTime,
-      duration: 0.24,
-      type: "triangle",
-      gain: step % 4 === 0 ? 0.16 : 0.11,
-      target: audioState.musicGain,
-    });
-    if (step % 2 === 0) {
-      playTone({
-        frequency: bassFrequency,
-        startTime: audioState.nextNoteTime,
-        duration: 0.52,
-        type: "sine",
-        gain: 0.08,
-        target: audioState.musicGain,
-      });
-    }
-    audioState.step += 1;
-    audioState.nextNoteTime += stepDuration;
-  }
-}
-
 async function startGameAudio() {
   const context = ensureAudioContext();
   if (!context) return;
@@ -124,12 +104,17 @@ async function startGameAudio() {
     await context.resume();
   }
   audioState.enabled = true;
-
-  if (audioState.started) return;
   audioState.started = true;
-  audioState.nextNoteTime = context.currentTime + 0.05;
-  scheduleMusicSlice();
-  audioState.musicTimer = window.setInterval(scheduleMusicSlice, 180);
+
+  const music = ensureMusicElement(context);
+  if (!music || !music.paused) return;
+
+  try {
+    await music.play();
+    audioState.musicError = null;
+  } catch (error) {
+    audioState.musicError = error instanceof Error ? error.message : String(error);
+  }
 }
 
 function playAppleSound() {
@@ -157,6 +142,9 @@ function playAppleSound() {
 }
 
 function pauseAudio() {
+  if (audioState.musicElement && !audioState.musicElement.paused) {
+    audioState.musicElement.pause();
+  }
   if (audioState.context && audioState.context.state === "running") {
     audioState.context.suspend();
   }
@@ -164,8 +152,12 @@ function pauseAudio() {
 
 function resumeAudio() {
   if (audioState.enabled && audioState.context && audioState.context.state === "suspended") {
-    audioState.nextNoteTime = audioState.context.currentTime + 0.05;
     audioState.context.resume();
+  }
+  if (audioState.enabled && audioState.musicElement?.paused) {
+    audioState.musicElement.play().catch((error) => {
+      audioState.musicError = error instanceof Error ? error.message : String(error);
+    });
   }
 }
 

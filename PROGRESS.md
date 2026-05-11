@@ -40,6 +40,9 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 벽 반사는 진행 벡터를 벽 축 기준으로 반사하고, 몸통 반사는 충돌 몸통 위치 기준 법선으로 반사합니다.
 - 기본 이동 속도를 초당 5칸에서 6칸으로 1.2배 올렸습니다.
 - 전체 음향 볼륨을 올리기 위해 Web Audio master gain을 0.72에서 0.86으로 높였습니다.
+- 배경음악을 첨부 MP3 파일(`assets/audio/music/bgm.mp3`) 재생 방식으로 교체했습니다.
+- Android WebView 번들에서도 동작하도록 MP3를 base64 data URI로 generated HTML에 포함하도록 바꿨습니다.
+- 브라우저 직접 실행 경로와 generated HTML 경로 모두 첫 클릭 후 BGM이 재생 상태가 되는 것을 확인했습니다.
 
 ## Not Working
 
@@ -81,7 +84,8 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - Expo WebView는 generated HTML을 로드하며, Phaser는 로컬 vendored 파일을 번들에 inline 합니다.
 - Expo SDK 55 실행에는 Node.js `>=20.19.4`를 사용합니다.
 - 로컬 Gradle APK는 debug certificate로 서명되며, 실기기 테스트용 설치 APK로 사용합니다.
-- 오디오는 외부 파일 대신 `main.js` 안의 Web Audio 신시사이저로 생성해 WebView HTML 번들에서도 별도 asset 경로 없이 동작하게 합니다.
+- 배경음악은 `assets/audio/music/bgm.mp3`를 사용하며, Android WebView HTML 번들에서는 base64 data URI로 포함합니다.
+- 사과 획득 효과음은 별도 파일 없이 `main.js` 안의 Web Audio 신시사이저로 생성합니다.
 - 이동 모델은 8방향 정수 격자 대신 연속 좌표와 각도 기반으로 처리합니다.
 - 기본 이동 속도는 초당 6칸이며, 모든 각도에서 같은 속도가 나도록 단위 벡터를 사용합니다.
 - 몸통은 격자 셀 배열이 아니라 머리 trail에서 현재 레벨 수만큼 샘플링한 표시 세그먼트로 관리합니다.

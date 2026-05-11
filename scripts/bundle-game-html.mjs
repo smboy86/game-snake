@@ -9,6 +9,10 @@ const phaserPath = path.join(root, "vendor", "phaser.min.js");
 const phaser = fs.readFileSync(phaserPath, "utf8");
 const styles = read("styles.css");
 const gameCode = read("main.js");
+const bgm = fs.readFileSync(path.join(root, "assets", "audio", "music", "bgm.mp3"));
+const gameAssets = {
+  bgm: `data:audio/mpeg;base64,${bgm.toString("base64")}`,
+};
 
 const html = `<!doctype html>
 <html lang="ko">
@@ -23,6 +27,7 @@ const html = `<!doctype html>
       <div id="game"></div>
     </main>
     <script>${phaser}</script>
+    <script>window.__snake_assets = ${JSON.stringify(gameAssets)};</script>
     <script>${gameCode}</script>
   </body>
 </html>`;
