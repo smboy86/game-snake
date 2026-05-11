@@ -1,36 +1,31 @@
 const FIELD_COLS = 50;
 const FIELD_ROWS = 50;
 const CELL_SIZE = 16;
-const MOVE_INTERVAL_MS = 200;
+const SPEED_CELLS_PER_SECOND = 5;
+const TURN_RATE_RADIANS_PER_SECOND = Math.PI * 1.45;
+const BODY_SPACING_CELLS = 0.85;
 const APPLE_EAT_RADIUS_CELLS = 3;
 const BASE_BODY_SIZE = 12;
 const BODY_GROWTH_PER_LEVEL = 1;
 const MAX_BODY_SIZE = 26;
-const DIRECTIONS = {
-  up: { x: 0, y: -1, label: "up" },
-  down: { x: 0, y: 1, label: "down" },
-  left: { x: -1, y: 0, label: "left" },
-  right: { x: 1, y: 0, label: "right" },
-  upLeft: { x: -1, y: -1, label: "up-left" },
-  upRight: { x: 1, y: -1, label: "up-right" },
-  downLeft: { x: -1, y: 1, label: "down-left" },
-  downRight: { x: 1, y: 1, label: "down-right" },
-};
+const MAX_UPDATE_STEP_MS = 1000 / 60;
+const TWO_PI = Math.PI * 2;
 
 const state = {
   mode: "playing",
   level: 1,
   applesEaten: 0,
-  direction: DIRECTIONS.right,
-  pendingDirection: DIRECTIONS.right,
+  headingAngle: 0,
+  targetAngle: 0,
   pointerControl: {
     active: false,
     pointerId: null,
     x: 0,
     y: 0,
   },
-  moveAccumulator: 0,
   bounceTimer: 0,
+  head: { x: 25, y: 25 },
+  trail: [{ x: 25, y: 25 }],
   segments: [{ x: 25, y: 25 }],
   apple: { x: 31, y: 25 },
   lastEvent: "started",
@@ -179,113 +174,87 @@ function bodySize() {
 }
 
 function keyOf(cell) {
-  return `${cell.x},${cell.y}`;
+  return `${Math.round(cell.x)},${Math.round(cell.y)}`;
 }
 
-function directionByVector(x, y) {
-  return Object.values(DIRECTIONS).find((direction) => direction.x === x && direction.y === y) || DIRECTIONS.right;
+function normalizeAngle(angle) {
+  let normalized = angle % TWO_PI;
+  if (normalized <= -Math.PI) normalized += TWO_PI;
+  if (normalized > Math.PI) normalized -= TWO_PI;
+  return normalized;
 }
 
-function directionFromTouch(localX, localY, width, height) {
+function angleToVector(angle) {
+  return { x: Math.cos(angle), y: Math.sin(angle) };
+}
+
+function directionLabel(angle) {
+  const degrees = (normalizeAngle(angle) * 180) / Math.PI;
+  return `${Math.round(degrees)}deg`;
+}
+
+function targetAngleFromTouch(localX, localY, width, height) {
   const dx = localX - width / 2;
   const dy = localY - height / 2;
   const deadZone = Math.min(width, height) * 0.08;
   if (Math.hypot(dx, dy) < deadZone) return null;
-  const sx = dx > deadZone ? 1 : dx < -deadZone ? -1 : 0;
-  const sy = dy > deadZone ? 1 : dy < -deadZone ? -1 : 0;
-  const found = Object.values(DIRECTIONS).find((direction) => direction.x === sx && direction.y === sy);
-  return found || null;
+  return Math.atan2(dy, dx);
 }
 
 function applyPointerDirection(pointer, width, height) {
-  const direction = directionFromTouch(pointer.x, pointer.y, width, height);
+  const targetAngle = targetAngleFromTouch(pointer.x, pointer.y, width, height);
   state.pointerControl.x = pointer.x;
   state.pointerControl.y = pointer.y;
 
-  if (direction) {
-    state.pendingDirection = direction;
-    state.lastEvent = `drag-${direction.label}`;
+  if (targetAngle !== null) {
+    state.targetAngle = targetAngle;
+    state.lastEvent = `drag-${directionLabel(targetAngle)}`;
   }
 }
 
-function isInsideField(cell) {
-  return cell.x >= 0 && cell.x < FIELD_COLS && cell.y >= 0 && cell.y < FIELD_ROWS;
+function isInsideField(point) {
+  return point.x >= 0 && point.x <= FIELD_COLS && point.y >= 0 && point.y <= FIELD_ROWS;
 }
 
-function isOccupiedByBody(cell) {
-  return state.segments.slice(1).some((segment) => segment.x === cell.x && segment.y === cell.y);
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function isSafeCell(cell) {
-  return isInsideField(cell) && !isOccupiedByBody(cell);
+function isOccupiedByBody(point, radius = 0.7) {
+  return state.segments.slice(4).some((segment) => distance(segment, point) < radius);
+}
+
+function isSafePoint(point) {
+  return isInsideField(point) && !isOccupiedByBody(point, 1.1);
 }
 
 function appleDistanceFromHead() {
-  const head = state.segments[0];
-  return Math.hypot(head.x - state.apple.x, head.y - state.apple.y);
+  return distance(state.head, state.apple);
 }
 
 function isAppleInEatRange() {
   return appleDistanceFromHead() <= APPLE_EAT_RADIUS_CELLS;
 }
 
-function randomSafeDirection(head) {
-  const safeDirections = Object.values(DIRECTIONS).filter((direction) => {
-    const next = { x: head.x + direction.x, y: head.y + direction.y };
-    return isSafeCell(next);
+function randomSafeAngle(head) {
+  const candidates = Array.from({ length: 16 }, (_, index) => (index / 16) * TWO_PI);
+  const safeAngles = candidates.filter((angle) => {
+    const vector = angleToVector(angle);
+    const next = { x: head.x + vector.x, y: head.y + vector.y };
+    return isSafePoint(next);
   });
-  if (!safeDirections.length) return null;
-  return safeDirections[Math.floor(Math.random() * safeDirections.length)];
-}
-
-function reflectFromWall(direction, next) {
-  let reflectedX = direction.x;
-  let reflectedY = direction.y;
-  if (next.x < 0 || next.x >= FIELD_COLS) reflectedX *= -1;
-  if (next.y < 0 || next.y >= FIELD_ROWS) reflectedY *= -1;
-  return directionByVector(reflectedX, reflectedY);
-}
-
-function reflectFromBody(direction, head, collidedSegment) {
-  let reflectedX = direction.x;
-  let reflectedY = direction.y;
-  if (collidedSegment.x !== head.x) reflectedX *= -1;
-  if (collidedSegment.y !== head.y) reflectedY *= -1;
-  return directionByVector(reflectedX, reflectedY);
-}
-
-function resolveBounce(head, reflectedDirection, eventName) {
-  let finalDirection = reflectedDirection;
-  let finalEvent = eventName;
-  let next = { x: head.x + finalDirection.x, y: head.y + finalDirection.y };
-
-  if (!isSafeCell(next)) {
-    const randomDirection = randomSafeDirection(head);
-    if (!randomDirection) {
-      state.bounceTimer = 220;
-      state.lastEvent = `${eventName}-blocked`;
-      return null;
-    }
-    finalDirection = randomDirection;
-    finalEvent = `${eventName}-random`;
-    next = { x: head.x + finalDirection.x, y: head.y + finalDirection.y };
-  }
-
-  state.direction = finalDirection;
-  state.pendingDirection = finalDirection;
-  state.bounceTimer = 220;
-  state.lastEvent = finalEvent;
-  return next;
+  if (!safeAngles.length) return null;
+  return safeAngles[Math.floor(Math.random() * safeAngles.length)];
 }
 
 function placeApple() {
   const occupied = new Set(state.segments.map(keyOf));
   for (let i = 0; i < 400; i++) {
     const candidate = {
-      x: Math.floor(Math.random() * FIELD_COLS),
-      y: Math.floor(Math.random() * FIELD_ROWS),
+      x: Math.random() * FIELD_COLS,
+      y: Math.random() * FIELD_ROWS,
     };
-    if (!occupied.has(keyOf(candidate))) {
+    if (!occupied.has(keyOf(candidate)) && distance(candidate, state.head) > APPLE_EAT_RADIUS_CELLS + 2) {
       state.apple = candidate;
       return;
     }
@@ -293,77 +262,185 @@ function placeApple() {
   state.apple = { x: 0, y: 0 };
 }
 
-function growToLevel() {
-  while (state.segments.length < state.level) {
-    const tail = state.segments[state.segments.length - 1];
-    state.segments.push({ x: tail.x, y: tail.y });
+function sampleTrailAt(distanceFromHead) {
+  if (distanceFromHead <= 0 || state.trail.length === 1) return { ...state.head };
+
+  let travelled = 0;
+  for (let i = 0; i < state.trail.length - 1; i++) {
+    const current = state.trail[i];
+    const next = state.trail[i + 1];
+    const segmentDistance = distance(current, next);
+    if (travelled + segmentDistance >= distanceFromHead) {
+      const ratio = (distanceFromHead - travelled) / Math.max(segmentDistance, 0.0001);
+      return {
+        x: current.x + (next.x - current.x) * ratio,
+        y: current.y + (next.y - current.y) * ratio,
+      };
+    }
+    travelled += segmentDistance;
   }
-  if (state.segments.length > state.level) {
-    state.segments.length = state.level;
+
+  return { ...state.trail[state.trail.length - 1] };
+}
+
+function rebuildSegmentsFromTrail() {
+  const targetLength = Math.max(1, state.level);
+  state.segments = Array.from({ length: targetLength }, (_, index) => sampleTrailAt(index * BODY_SPACING_CELLS));
+}
+
+function trimTrail() {
+  const maxTrailDistance = Math.max(10, (state.level + 8) * BODY_SPACING_CELLS);
+  let travelled = 0;
+  let keepUntil = state.trail.length;
+
+  for (let i = 0; i < state.trail.length - 1; i++) {
+    travelled += distance(state.trail[i], state.trail[i + 1]);
+    if (travelled > maxTrailDistance) {
+      keepUntil = i + 2;
+      break;
+    }
+  }
+
+  state.trail.length = keepUntil;
+}
+
+function recordHeadInTrail() {
+  const newest = state.trail[0];
+  if (!newest || distance(newest, state.head) >= 0.001) {
+    state.trail.unshift({ ...state.head });
+    trimTrail();
+  } else {
+    newest.x = state.head.x;
+    newest.y = state.head.y;
   }
 }
 
-function moveSnakeOneCell() {
-  state.direction = state.pendingDirection;
-  const head = state.segments[0];
-  let next = { x: head.x + state.direction.x, y: head.y + state.direction.y };
-
-  if (!isInsideField(next)) {
-    next = resolveBounce(head, reflectFromWall(state.direction, next), "wall-bounce");
-    if (!next) return;
+function reflectHeadingFromWall() {
+  let bounced = false;
+  if (state.head.x < 0) {
+    state.head.x = 0;
+    state.headingAngle = Math.PI - state.headingAngle;
+    bounced = true;
+  } else if (state.head.x > FIELD_COLS) {
+    state.head.x = FIELD_COLS;
+    state.headingAngle = Math.PI - state.headingAngle;
+    bounced = true;
   }
 
-  const collidedSegment = state.segments.slice(1).find((segment) => segment.x === next.x && segment.y === next.y);
-  if (collidedSegment) {
-    next = resolveBounce(head, reflectFromBody(state.direction, head, collidedSegment), "body-bounce");
-    if (!next) return;
+  if (state.head.y < 0) {
+    state.head.y = 0;
+    state.headingAngle = -state.headingAngle;
+    bounced = true;
+  } else if (state.head.y > FIELD_ROWS) {
+    state.head.y = FIELD_ROWS;
+    state.headingAngle = -state.headingAngle;
+    bounced = true;
   }
 
-  state.segments.unshift(next);
+  if (bounced) {
+    state.headingAngle = normalizeAngle(state.headingAngle);
+    state.targetAngle = state.headingAngle;
+    state.bounceTimer = 220;
+    state.lastEvent = "wall-bounce";
+  }
+}
+
+function reflectHeadingFromBody() {
+  const bodyRadiusCells = Math.max(0.5, bodySize() / CELL_SIZE * 0.52);
+  const collidedSegment = state.segments.slice(6).find((segment) => distance(segment, state.head) < bodyRadiusCells);
+  if (!collidedSegment) return;
+
+  const velocity = angleToVector(state.headingAngle);
+  const normalLength = Math.max(distance(state.head, collidedSegment), 0.0001);
+  const normal = {
+    x: (state.head.x - collidedSegment.x) / normalLength,
+    y: (state.head.y - collidedSegment.y) / normalLength,
+  };
+  const dot = velocity.x * normal.x + velocity.y * normal.y;
+  const reflected = {
+    x: velocity.x - 2 * dot * normal.x,
+    y: velocity.y - 2 * dot * normal.y,
+  };
+
+  state.headingAngle = normalizeAngle(Math.atan2(reflected.y, reflected.x));
+  if (!Number.isFinite(state.headingAngle)) {
+    state.headingAngle = randomSafeAngle(state.head) ?? 0;
+  }
+  state.targetAngle = state.headingAngle;
+  state.bounceTimer = 220;
+  state.lastEvent = "body-bounce";
+
+  const push = angleToVector(state.headingAngle);
+  state.head.x += push.x * 0.35;
+  state.head.y += push.y * 0.35;
+  reflectHeadingFromWall();
+}
+
+function moveSnakeContinuous(deltaMs) {
+  const deltaSeconds = deltaMs / 1000;
+  const angleDelta = normalizeAngle(state.targetAngle - state.headingAngle);
+  const maxTurn = TURN_RATE_RADIANS_PER_SECOND * deltaSeconds;
+  state.headingAngle = normalizeAngle(state.headingAngle + Math.max(-maxTurn, Math.min(maxTurn, angleDelta)));
+
+  const direction = angleToVector(state.headingAngle);
+  const distanceThisFrame = SPEED_CELLS_PER_SECOND * deltaSeconds;
+  state.head.x += direction.x * distanceThisFrame;
+  state.head.y += direction.y * distanceThisFrame;
+
+  reflectHeadingFromWall();
+  recordHeadInTrail();
+  rebuildSegmentsFromTrail();
+  reflectHeadingFromBody();
+  recordHeadInTrail();
+  rebuildSegmentsFromTrail();
+
   if (isAppleInEatRange()) {
     state.applesEaten += 1;
     state.level += 1;
     state.lastEvent = "apple";
     playAppleSound();
-    growToLevel();
+    rebuildSegmentsFromTrail();
     placeApple();
-  } else {
-    growToLevel();
   }
 }
 
 function updateGame(deltaMs) {
   if (state.mode !== "playing") return;
-  state.moveAccumulator += deltaMs;
   state.bounceTimer = Math.max(0, state.bounceTimer - deltaMs);
-  while (state.moveAccumulator >= MOVE_INTERVAL_MS) {
-    state.moveAccumulator -= MOVE_INTERVAL_MS;
-    moveSnakeOneCell();
+
+  let remaining = deltaMs;
+  while (remaining > 0) {
+    const step = Math.min(MAX_UPDATE_STEP_MS, remaining);
+    moveSnakeContinuous(step);
+    remaining -= step;
   }
 }
 
 function worldToScreen(cell, width, height) {
-  const head = state.segments[0];
   return {
-    x: width / 2 + (cell.x - head.x) * CELL_SIZE,
-    y: height / 2 + (cell.y - head.y) * CELL_SIZE,
+    x: width / 2 + (cell.x - state.head.x) * CELL_SIZE,
+    y: height / 2 + (cell.y - state.head.y) * CELL_SIZE,
   };
 }
 
 function renderGameToText() {
-  const head = state.segments[0];
   const payload = {
-    coordinateSystem: "grid origin top-left; x right, y down; viewport keeps snake head at screen center",
+    coordinateSystem: "continuous field coordinates; origin top-left; x right, y down; viewport keeps snake head at screen center",
     mode: state.mode,
     field: { cols: FIELD_COLS, rows: FIELD_ROWS },
+    movement: {
+      speedCellsPerSecond: SPEED_CELLS_PER_SECOND,
+      headingDegrees: Number(((normalizeAngle(state.headingAngle) * 180) / Math.PI).toFixed(1)),
+      targetDegrees: Number(((normalizeAngle(state.targetAngle) * 180) / Math.PI).toFixed(1)),
+    },
     appleEatRadiusCells: APPLE_EAT_RADIUS_CELLS,
     appleDistanceCells: Number(appleDistanceFromHead().toFixed(2)),
     level: state.level,
     length: state.segments.length,
     bodySize: bodySize(),
-    direction: state.direction.label,
-    head,
-    apple: state.apple,
+    direction: directionLabel(state.headingAngle),
+    head: { x: Number(state.head.x.toFixed(2)), y: Number(state.head.y.toFixed(2)) },
+    apple: { x: Number(state.apple.x.toFixed(2)), y: Number(state.apple.y.toFixed(2)) },
     applesEaten: state.applesEaten,
     lastEvent: state.lastEvent,
   };
@@ -424,19 +501,18 @@ class SnakeScene extends Phaser.Scene {
   }
 
   drawGrid(width, height) {
-    const head = state.segments[0];
-    const leftCol = Math.floor(head.x - width / 2 / CELL_SIZE) - 1;
-    const rightCol = Math.ceil(head.x + width / 2 / CELL_SIZE) + 1;
-    const topRow = Math.floor(head.y - height / 2 / CELL_SIZE) - 1;
-    const bottomRow = Math.ceil(head.y + height / 2 / CELL_SIZE) + 1;
+    const leftCol = Math.floor(state.head.x - width / 2 / CELL_SIZE) - 1;
+    const rightCol = Math.ceil(state.head.x + width / 2 / CELL_SIZE) + 1;
+    const topRow = Math.floor(state.head.y - height / 2 / CELL_SIZE) - 1;
+    const bottomRow = Math.ceil(state.head.y + height / 2 / CELL_SIZE) + 1;
 
     this.graphics.lineStyle(1, 0xcbd6b3, 0.55);
     for (let col = leftCol; col <= rightCol; col++) {
-      const x = width / 2 + (col - head.x) * CELL_SIZE;
+      const x = width / 2 + (col - state.head.x) * CELL_SIZE;
       this.graphics.lineBetween(x, 0, x, height);
     }
     for (let row = topRow; row <= bottomRow; row++) {
-      const y = height / 2 + (row - head.y) * CELL_SIZE;
+      const y = height / 2 + (row - state.head.y) * CELL_SIZE;
       this.graphics.lineBetween(0, y, width, y);
     }
 
