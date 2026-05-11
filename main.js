@@ -1,7 +1,7 @@
 const FIELD_COLS = 50;
 const FIELD_ROWS = 50;
 const CELL_SIZE = 16;
-const SPEED_CELLS_PER_SECOND = 5;
+const SPEED_CELLS_PER_SECOND = 6;
 const TURN_RATE_RADIANS_PER_SECOND = Math.PI * 1.45;
 const BODY_SPACING_CELLS = 0.85;
 const APPLE_EAT_RADIUS_CELLS = 3;
@@ -57,7 +57,7 @@ function ensureAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return null;
   const context = new AudioContextClass();
-  audioState.masterGain = createGainNode(context, context.destination, 0.72);
+  audioState.masterGain = createGainNode(context, context.destination, 0.86);
   audioState.musicGain = createGainNode(context, audioState.masterGain, 0.18);
   audioState.sfxGain = createGainNode(context, audioState.masterGain, 0.38);
   audioState.context = context;
