@@ -10,8 +10,10 @@ const phaser = fs.readFileSync(phaserPath, "utf8");
 const styles = read("styles.css");
 const gameCode = read("main.js");
 const bgm = fs.readFileSync(path.join(root, "assets", "audio", "music", "bgm.mp3"));
+const background = fs.readFileSync(path.join(root, "assets", "images", "backgrounds", "city-alley-field.png"));
 const gameAssets = {
   bgm: `data:audio/mpeg;base64,${bgm.toString("base64")}`,
+  background: `data:image/png;base64,${background.toString("base64")}`,
 };
 
 const html = `<!doctype html>

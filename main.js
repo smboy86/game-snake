@@ -11,6 +11,9 @@ const MAX_BODY_SIZE = 26;
 const MAX_UPDATE_STEP_MS = 1000 / 60;
 const TWO_PI = Math.PI * 2;
 const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
+const BACKGROUND_SOURCE = window.__snake_assets?.background ?? "assets/images/backgrounds/city-alley-field.png";
+const BACKGROUND_KEY = "city-alley-field";
+const BACKGROUND_PADDING_CELLS = 22;
 
 const state = {
   mode: "playing",
@@ -415,6 +418,35 @@ function worldToScreen(cell, width, height) {
   };
 }
 
+function fieldBounds(width, height) {
+  const topLeft = worldToScreen({ x: 0, y: 0 }, width, height);
+  const bottomRight = worldToScreen({ x: FIELD_COLS, y: FIELD_ROWS }, width, height);
+  return {
+    left: topLeft.x,
+    top: topLeft.y,
+    right: bottomRight.x,
+    bottom: bottomRight.y,
+    width: bottomRight.x - topLeft.x,
+    height: bottomRight.y - topLeft.y,
+  };
+}
+
+function backgroundBounds(width, height) {
+  const topLeft = worldToScreen({ x: -BACKGROUND_PADDING_CELLS, y: -BACKGROUND_PADDING_CELLS }, width, height);
+  const bottomRight = worldToScreen({
+    x: FIELD_COLS + BACKGROUND_PADDING_CELLS,
+    y: FIELD_ROWS + BACKGROUND_PADDING_CELLS,
+  }, width, height);
+  return {
+    left: topLeft.x,
+    top: topLeft.y,
+    right: bottomRight.x,
+    bottom: bottomRight.y,
+    width: bottomRight.x - topLeft.x,
+    height: bottomRight.y - topLeft.y,
+  };
+}
+
 function renderGameToText() {
   const payload = {
     coordinateSystem: "continuous field coordinates; origin top-left; x right, y down; viewport keeps snake head at screen center",
@@ -444,19 +476,25 @@ class SnakeScene extends Phaser.Scene {
     super("SnakeScene");
   }
 
+  preload() {
+    this.load.image(BACKGROUND_KEY, BACKGROUND_SOURCE);
+  }
+
   create() {
     sceneRef = this;
+    this.viewportBackground = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0.5, 0.5);
+    this.backgroundImage = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0, 0);
     this.graphics = this.add.graphics();
     this.hudText = this.add.text(18, 16, "", {
       fontFamily: "system-ui, sans-serif",
       fontSize: "16px",
-      color: "#122014",
+      color: "#f4f0d4",
       fontStyle: "600",
     }).setScrollFactor(0);
     this.hintText = this.add.text(18, 0, "", {
       fontFamily: "system-ui, sans-serif",
       fontSize: "13px",
-      color: "#38513c",
+      color: "#bfd6f5",
     }).setScrollFactor(0);
     this.input.on("pointerdown", (pointer) => {
       startGameAudio();
@@ -492,26 +530,42 @@ class SnakeScene extends Phaser.Scene {
     this.draw();
   }
 
+  drawBackground(width, height) {
+    const texture = this.textures.get(BACKGROUND_KEY).getSourceImage();
+    const viewportScale = Math.max(width / texture.width, height / texture.height);
+    this.viewportBackground.setPosition(width / 2, height / 2);
+    this.viewportBackground.setScale(viewportScale);
+
+    const bounds = backgroundBounds(width, height);
+    this.backgroundImage.setPosition(bounds.left, bounds.top);
+    this.backgroundImage.setDisplaySize(bounds.width, bounds.height);
+  }
+
   drawGrid(width, height) {
     const leftCol = Math.floor(state.head.x - width / 2 / CELL_SIZE) - 1;
     const rightCol = Math.ceil(state.head.x + width / 2 / CELL_SIZE) + 1;
     const topRow = Math.floor(state.head.y - height / 2 / CELL_SIZE) - 1;
     const bottomRow = Math.ceil(state.head.y + height / 2 / CELL_SIZE) + 1;
+    const bounds = fieldBounds(width, height);
 
-    this.graphics.lineStyle(1, 0xcbd6b3, 0.55);
+    this.graphics.lineStyle(1, 0x8bc7df, 0.28);
     for (let col = leftCol; col <= rightCol; col++) {
       const x = width / 2 + (col - state.head.x) * CELL_SIZE;
-      this.graphics.lineBetween(x, 0, x, height);
+      if (x >= bounds.left && x <= bounds.right) {
+        this.graphics.lineBetween(x, bounds.top, x, bounds.bottom);
+      }
     }
     for (let row = topRow; row <= bottomRow; row++) {
       const y = height / 2 + (row - state.head.y) * CELL_SIZE;
-      this.graphics.lineBetween(0, y, width, y);
+      if (y >= bounds.top && y <= bounds.bottom) {
+        this.graphics.lineBetween(bounds.left, y, bounds.right, y);
+      }
     }
 
-    this.graphics.lineStyle(3, 0x59705c, 0.9);
-    const topLeft = worldToScreen({ x: 0, y: 0 }, width, height);
-    const bottomRight = worldToScreen({ x: FIELD_COLS, y: FIELD_ROWS }, width, height);
-    this.graphics.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    this.graphics.lineStyle(4, 0x9fe7ff, 0.92);
+    this.graphics.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+    this.graphics.lineStyle(1, 0xffc76e, 0.55);
+    this.graphics.strokeRect(bounds.left + 5, bounds.top + 5, bounds.width - 10, bounds.height - 10);
   }
 
   draw() {
@@ -519,32 +573,31 @@ class SnakeScene extends Phaser.Scene {
     const height = this.scale.height;
     const size = bodySize();
     this.graphics.clear();
-    this.cameras.main.setBackgroundColor("#eef2dd");
-    this.graphics.fillStyle(0xeef2dd, 1);
-    this.graphics.fillRect(0, 0, width, height);
+    this.cameras.main.setBackgroundColor("#171b45");
+    this.drawBackground(width, height);
     this.drawGrid(width, height);
     if (state.pointerControl.active) {
-      this.graphics.lineStyle(3, 0x224f2c, 0.5);
+      this.graphics.lineStyle(3, 0x9fe7ff, 0.62);
       this.graphics.lineBetween(width / 2, height / 2, state.pointerControl.x, state.pointerControl.y);
-      this.graphics.fillStyle(0x224f2c, 0.2);
+      this.graphics.fillStyle(0x9fe7ff, 0.18);
       this.graphics.fillCircle(state.pointerControl.x, state.pointerControl.y, Math.max(14, size * 0.9));
     }
 
     const apple = worldToScreen(state.apple, width, height);
-    this.graphics.fillStyle(0xd94343, 1);
+    this.graphics.fillStyle(0xff5a5f, 1);
     this.graphics.fillCircle(apple.x, apple.y, Math.max(7, size * 0.48));
-    this.graphics.fillStyle(0x4f8a42, 1);
+    this.graphics.fillStyle(0xffc76e, 1);
     this.graphics.fillEllipse(apple.x + 4, apple.y - 8, 8, 4);
 
     state.segments.forEach((segment, index) => {
       const pos = worldToScreen(segment, width, height);
       const alpha = index === 0 ? 1 : Math.max(0.42, 1 - index * 0.08);
-      const color = index === 0 ? 0x224f2c : 0x3f8f4b;
+      const color = index === 0 ? 0x2cf38c : 0x3acb7a;
       this.graphics.fillStyle(color, alpha);
       this.graphics.fillRoundedRect(pos.x - size / 2, pos.y - size / 2, size, size, Math.min(8, size / 3));
     });
 
-    const headPulse = state.bounceTimer > 0 ? 0xf2b84b : 0xf8f4df;
+    const headPulse = state.bounceTimer > 0 ? 0xffc76e : 0xe8fff4;
     this.graphics.lineStyle(3, headPulse, 1);
     this.graphics.strokeCircle(width / 2, height / 2, size * 0.72);
 
@@ -559,7 +612,7 @@ const config = {
   parent: "game",
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: "#eef2dd",
+  backgroundColor: "#171b45",
   scale: {
     mode: Phaser.Scale.RESIZE,
     parent: "game",

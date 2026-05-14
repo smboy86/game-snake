@@ -28,10 +28,10 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#eef2dd",
+    backgroundColor: "#171b45",
   },
   webview: {
     flex: 1,
-    backgroundColor: "#eef2dd",
+    backgroundColor: "#171b45",
   },
 });
