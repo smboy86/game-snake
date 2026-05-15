@@ -6,8 +6,14 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "platforms": ["android"],
+    "icon": "./assets/images/icons/android-icon-preview.png",
     "android": {
-      "package": "com.smboy86.gamesnake"
+      "package": "com.smboy86.gamesnake",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icons/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/icons/android-icon-background.png",
+        "monochromeImage": "./assets/images/icons/android-icon-monochrome.png"
+      }
     },
     "extra": {
       "gameRuntime": "webview"

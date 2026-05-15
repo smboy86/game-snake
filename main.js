@@ -11,9 +11,9 @@ const MAX_BODY_SIZE = 26;
 const MAX_UPDATE_STEP_MS = 1000 / 60;
 const TWO_PI = Math.PI * 2;
 const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
-const BACKGROUND_SOURCE = window.__snake_assets?.background ?? "assets/images/backgrounds/city-alley-field.png";
+const BACKGROUND_SOURCE = window.__snake_assets?.background ?? "assets/images/backgrounds/city-alley-field-expanded.png";
 const BACKGROUND_KEY = "city-alley-field";
-const BACKGROUND_PADDING_CELLS = 22;
+const BACKGROUND_PADDING_CELLS = 27;
 
 const state = {
   mode: "playing",
@@ -45,6 +45,8 @@ const audioState = {
   musicElement: null,
   musicSource: null,
   musicError: null,
+  retryTimer: null,
+  retryCount: 0,
   enabled: false,
   started: false,
 };
@@ -76,11 +78,54 @@ function ensureMusicElement(context) {
   music.loop = true;
   music.preload = "auto";
   music.volume = 1;
+  music.playsInline = true;
 
   audioState.musicSource = context.createMediaElementSource(music);
   audioState.musicSource.connect(audioState.musicGain);
   audioState.musicElement = music;
+  music.load();
+
+  ["canplay", "loadeddata"].forEach((eventName) => {
+    music.addEventListener(eventName, () => {
+      if (audioState.enabled && music.paused) {
+        attemptMusicPlayback();
+      }
+    });
+  });
   return music;
+}
+
+function scheduleMusicRetry() {
+  if (!audioState.enabled || audioState.retryTimer || audioState.retryCount >= 8) return;
+  const delay = Math.min(1200, 120 + audioState.retryCount * 140);
+  audioState.retryCount += 1;
+  audioState.retryTimer = window.setTimeout(() => {
+    audioState.retryTimer = null;
+    attemptMusicPlayback();
+  }, delay);
+}
+
+function attemptMusicPlayback() {
+  const context = ensureAudioContext();
+  if (!context) return;
+  const music = ensureMusicElement(context);
+  if (!music || !music.paused) return;
+
+  if (context.state === "suspended") {
+    context.resume().catch((error) => {
+      audioState.musicError = error instanceof Error ? error.message : String(error);
+    });
+  }
+
+  music.play()
+    .then(() => {
+      audioState.musicError = null;
+      audioState.retryCount = 0;
+    })
+    .catch((error) => {
+      audioState.musicError = error instanceof Error ? error.message : String(error);
+      scheduleMusicRetry();
+    });
 }
 
 function playTone({ frequency, startTime, duration, type = "sine", gain = 0.2, target = audioState.sfxGain }) {
@@ -103,21 +148,15 @@ function playTone({ frequency, startTime, duration, type = "sine", gain = 0.2, t
 async function startGameAudio() {
   const context = ensureAudioContext();
   if (!context) return;
-  if (context.state === "suspended") {
-    await context.resume();
-  }
   audioState.enabled = true;
   audioState.started = true;
 
-  const music = ensureMusicElement(context);
-  if (!music || !music.paused) return;
-
-  try {
-    await music.play();
-    audioState.musicError = null;
-  } catch (error) {
-    audioState.musicError = error instanceof Error ? error.message : String(error);
+  if (context.state === "suspended") {
+    context.resume().catch((error) => {
+      audioState.musicError = error instanceof Error ? error.message : String(error);
+    });
   }
+  attemptMusicPlayback();
 }
 
 function playAppleSound() {
@@ -157,10 +196,8 @@ function resumeAudio() {
   if (audioState.enabled && audioState.context && audioState.context.state === "suspended") {
     audioState.context.resume();
   }
-  if (audioState.enabled && audioState.musicElement?.paused) {
-    audioState.musicElement.play().catch((error) => {
-      audioState.musicError = error instanceof Error ? error.message : String(error);
-    });
+  if (audioState.enabled) {
+    attemptMusicPlayback();
   }
 }
 
@@ -482,7 +519,6 @@ class SnakeScene extends Phaser.Scene {
 
   create() {
     sceneRef = this;
-    this.viewportBackground = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0.5, 0.5);
     this.backgroundImage = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0, 0);
     this.graphics = this.add.graphics();
     this.hudText = this.add.text(18, 16, "", {
@@ -531,11 +567,6 @@ class SnakeScene extends Phaser.Scene {
   }
 
   drawBackground(width, height) {
-    const texture = this.textures.get(BACKGROUND_KEY).getSourceImage();
-    const viewportScale = Math.max(width / texture.width, height / texture.height);
-    this.viewportBackground.setPosition(width / 2, height / 2);
-    this.viewportBackground.setScale(viewportScale);
-
     const bounds = backgroundBounds(width, height);
     this.backgroundImage.setPosition(bounds.left, bounds.top);
     this.backgroundImage.setDisplaySize(bounds.width, bounds.height);
@@ -638,3 +669,9 @@ document.addEventListener("visibilitychange", () => {
     resumeAudio();
   }
 });
+
+["pointerdown", "touchstart", "click"].forEach((eventName) => {
+  document.addEventListener(eventName, startGameAudio, { capture: true, passive: true });
+});
+
+window.addEventListener("focus", resumeAudio);

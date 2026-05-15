@@ -12,6 +12,8 @@ export default function App() {
         originWhitelist={["*"]}
         source={{ html: gameHtml, baseUrl: "" }}
         javaScriptEnabled
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback
         domStorageEnabled={false}
         scrollEnabled={false}
         bounces={false}

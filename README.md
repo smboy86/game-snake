@@ -1,4 +1,4 @@
-# Snake Game
+# 모험 스네이크
 
 자 이제 시작
 
@@ -30,3 +30,24 @@ eas build --platform android --profile preview
 ```
 
 `preview` profile은 Android 실기기 설치용 `.apk`를 만들도록 설정되어 있습니다.
+
+## apk 만들기
+
+```sh
+npm run game:bundle
+```
+
+```sh
+npx expo prebuild --platform android --clean
+```
+
+```sh
+cd android
+./gradlew assembleRelease
+```
+
+```sh
+cd ..
+mkdir -p output/apk
+cp android/app/build/outputs/apk/release/app-release.apk output/apk/game-snake-preview.apk
+```

@@ -5,7 +5,7 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 ## Working
 
 - `.agents/skills/game-dev` 개발 지침이 준비되어 있습니다.
-- Snake Game의 기본 PRD를 `DESIGN-DOCUMENT.md`에 작성했습니다.
+- 모험 스네이크의 기본 PRD를 `DESIGN-DOCUMENT.md`에 작성했습니다.
 - 보완 질문 답변을 반영해 충돌, 조작, 성장, 필드, 카메라, 승리 조건을 확정했습니다.
 - Phaser CDN 기반의 첫 실행 골격을 추가했습니다.
 - 모바일 화면 방향 터치, 8방향 이동, 사과, 레벨 성장, 중앙 고정 카메라, 충돌 반전 규칙을 구현했습니다.

@@ -10,7 +10,7 @@ const phaser = fs.readFileSync(phaserPath, "utf8");
 const styles = read("styles.css");
 const gameCode = read("main.js");
 const bgm = fs.readFileSync(path.join(root, "assets", "audio", "music", "bgm.mp3"));
-const background = fs.readFileSync(path.join(root, "assets", "images", "backgrounds", "city-alley-field.png"));
+const background = fs.readFileSync(path.join(root, "assets", "images", "backgrounds", "city-alley-field-expanded.png"));
 const gameAssets = {
   bgm: `data:audio/mpeg;base64,${bgm.toString("base64")}`,
   background: `data:image/png;base64,${background.toString("base64")}`,
@@ -21,11 +21,11 @@ const html = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>Snake Game</title>
+    <title>모험 스네이크</title>
     <style>${styles}</style>
   </head>
   <body>
-    <main id="game-shell" aria-label="Snake Game">
+    <main id="game-shell" aria-label="모험 스네이크">
       <div id="game"></div>
     </main>
     <script>${phaser}</script>
