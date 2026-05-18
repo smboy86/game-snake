@@ -228,6 +228,10 @@ function currentSpeedCellsPerSecond() {
   return BASE_SPEED_CELLS_PER_SECOND * state.speedMultiplier;
 }
 
+function currentTurnRateRadiansPerSecond() {
+  return TURN_RATE_RADIANS_PER_SECOND * Math.sqrt(state.speedMultiplier);
+}
+
 function bodySize() {
   return Math.min(MAX_BODY_SIZE, BASE_BODY_SIZE + (state.level - 1) * BODY_GROWTH_PER_LEVEL);
 }
@@ -466,7 +470,7 @@ function reflectHeadingFromBody() {
 function moveSnakeContinuous(deltaMs) {
   const deltaSeconds = deltaMs / 1000;
   const angleDelta = normalizeAngle(state.targetAngle - state.headingAngle);
-  const maxTurn = TURN_RATE_RADIANS_PER_SECOND * deltaSeconds;
+  const maxTurn = currentTurnRateRadiansPerSecond() * deltaSeconds;
   state.headingAngle = normalizeAngle(state.headingAngle + Math.max(-maxTurn, Math.min(maxTurn, angleDelta)));
 
   const direction = angleToVector(state.headingAngle);
@@ -552,6 +556,7 @@ function renderGameToText() {
       baseSpeedCellsPerSecond: BASE_SPEED_CELLS_PER_SECOND,
       speedMultiplier: Number(state.speedMultiplier.toFixed(4)),
       speedCellsPerSecond: Number(currentSpeedCellsPerSecond().toFixed(3)),
+      turnRateDegreesPerSecond: Number(((currentTurnRateRadiansPerSecond() * 180) / Math.PI).toFixed(1)),
       headingDegrees: Number(((normalizeAngle(state.headingAngle) * 180) / Math.PI).toFixed(1)),
       targetDegrees: Number(((normalizeAngle(state.targetAngle) * 180) / Math.PI).toFixed(1)),
     },

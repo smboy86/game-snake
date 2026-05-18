@@ -16,6 +16,7 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - `node --check main.js`, `node scripts/bundle-game-html.mjs`, `./node_modules/.bin/tsc --noEmit` 검증이 통과했습니다.
 - Playwright 검증으로 초기 메뉴 정지, 플레이 시작, 3개 사과, 세 번째 사과 후 속도 `1.3`, 흔들림 타이머, 일시정지 정지, 종료 확인/종료 상태를 확인했습니다.
 - 검증 스크린샷은 `output/feature-check/01-initial-menu.png`부터 `output/feature-check/06-exited.png`까지 생성했습니다.
+- 속도가 빨라질수록 회전 반경이 과도하게 커지는 문제를 완화하기 위해 회전 속도를 `sqrt(speedMultiplier)`로 보정했습니다.
 - `.agents/skills/game-dev` 개발 지침이 준비되어 있습니다.
 - 모험 스네이크의 기본 PRD를 `DESIGN-DOCUMENT.md`에 작성했습니다.
 - 보완 질문 답변을 반영해 충돌, 조작, 성장, 필드, 카메라, 승리 조건을 확정했습니다.
@@ -80,6 +81,7 @@ Original prompt: snake-game에 대한 기본 골격 문서를 작성하고, 게�
 - 2차 확장에서는 최초 상태를 `menu`로 시작하고, 플레이 중 우상단 버튼으로 `paused` 메뉴를 엽니다.
 - 사과는 한 세트에 최대 3개를 생성하며, 세트가 모두 소진되면 다음 3개를 다시 생성합니다.
 - 사과 누적 획득 수가 3의 배수가 될 때마다 이동 속도 배율을 현재 값 기준 30% 증가시키며 최대 제한은 두지 않습니다.
+- 회전 속도는 속도 배율과 동일하게 30%씩 늘리지 않고, `sqrt(speedMultiplier)`만 반영해 난이도 상승과 조작감을 함께 유지합니다.
 - Android WebView 종료는 JS 메시지를 React Native로 보내 앱 종료를 시도하고, 브라우저에서는 종료 완료 화면으로 대체합니다.
 - 게임 설계 원본은 루트의 `DESIGN-DOCUMENT.md`에 기록합니다.
 - 개발 진행상황은 루트의 `PROGRESS.md`에 기록합니다.
