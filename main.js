@@ -1,14 +1,18 @@
 const FIELD_COLS = 50;
 const FIELD_ROWS = 50;
 const CELL_SIZE = 16;
-const SPEED_CELLS_PER_SECOND = 6;
+const BASE_SPEED_CELLS_PER_SECOND = 6;
 const TURN_RATE_RADIANS_PER_SECOND = Math.PI * 1.45;
 const BODY_SPACING_CELLS = 0.85;
+const APPLE_SET_SIZE = 3;
 const APPLE_EAT_RADIUS_CELLS = 3;
 const BASE_BODY_SIZE = 12;
 const BODY_GROWTH_PER_LEVEL = 1;
 const MAX_BODY_SIZE = 26;
 const MAX_UPDATE_STEP_MS = 1000 / 60;
+const SPEED_GROWTH_FACTOR = 1.3;
+const SCREEN_SHAKE_DURATION_MS = 180;
+const RAIN_PARTICLE_DENSITY = 0.00018;
 const TWO_PI = Math.PI * 2;
 const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
 const BACKGROUND_SOURCE = window.__snake_assets?.background ?? "assets/images/backgrounds/city-alley-field-expanded.png";
@@ -16,9 +20,12 @@ const BACKGROUND_KEY = "city-alley-field";
 const BACKGROUND_PADDING_CELLS = 27;
 
 const state = {
-  mode: "playing",
+  mode: "menu",
+  menuVariant: "start",
+  modeBeforeConfirm: "menu",
   level: 1,
   applesEaten: 0,
+  speedMultiplier: 1,
   headingAngle: 0,
   targetAngle: 0,
   pointerControl: {
@@ -28,14 +35,24 @@ const state = {
     y: 0,
   },
   bounceTimer: 0,
+  screenShakeMs: 0,
+  elapsedMs: 0,
   head: { x: 25, y: 25 },
   trail: [{ x: 25, y: 25 }],
   segments: [{ x: 25, y: 25 }],
-  apple: { x: 31, y: 25 },
-  lastEvent: "started",
+  apples: [
+    { id: 1, x: 31, y: 25 },
+    { id: 2, x: 22, y: 30 },
+    { id: 3, x: 28, y: 18 },
+  ],
+  rainEnabled: true,
+  lastEvent: "menu",
 };
 
 let sceneRef = null;
+let renderShakeOffset = { x: 0, y: 0 };
+let uiElements = null;
+let nextAppleId = 4;
 
 const audioState = {
   context: null,
@@ -49,6 +66,7 @@ const audioState = {
   retryCount: 0,
   enabled: false,
   started: false,
+  waitingForGesture: false,
 };
 
 function createGainNode(context, target, value) {
@@ -124,6 +142,10 @@ function attemptMusicPlayback() {
     })
     .catch((error) => {
       audioState.musicError = error instanceof Error ? error.message : String(error);
+      if (error?.name === "NotAllowedError") {
+        audioState.waitingForGesture = true;
+        return;
+      }
       scheduleMusicRetry();
     });
 }
@@ -150,6 +172,7 @@ async function startGameAudio() {
   if (!context) return;
   audioState.enabled = true;
   audioState.started = true;
+  audioState.waitingForGesture = false;
 
   if (context.state === "suspended") {
     context.resume().catch((error) => {
@@ -199,6 +222,10 @@ function resumeAudio() {
   if (audioState.enabled) {
     attemptMusicPlayback();
   }
+}
+
+function currentSpeedCellsPerSecond() {
+  return BASE_SPEED_CELLS_PER_SECOND * state.speedMultiplier;
 }
 
 function bodySize() {
@@ -260,12 +287,21 @@ function isSafePoint(point) {
   return isInsideField(point) && !isOccupiedByBody(point, 1.1);
 }
 
-function appleDistanceFromHead() {
-  return distance(state.head, state.apple);
+function activeApples() {
+  return state.apples;
 }
 
-function isAppleInEatRange() {
-  return appleDistanceFromHead() <= APPLE_EAT_RADIUS_CELLS;
+function appleDistanceFromHead(apple) {
+  return distance(state.head, apple);
+}
+
+function nearestAppleDistanceFromHead() {
+  if (!state.apples.length) return null;
+  return Math.min(...state.apples.map(appleDistanceFromHead));
+}
+
+function eatenAppleIndex() {
+  return state.apples.findIndex((apple) => appleDistanceFromHead(apple) <= APPLE_EAT_RADIUS_CELLS);
 }
 
 function randomSafeAngle(head) {
@@ -279,19 +315,38 @@ function randomSafeAngle(head) {
   return safeAngles[Math.floor(Math.random() * safeAngles.length)];
 }
 
-function placeApple() {
-  const occupied = new Set(state.segments.map(keyOf));
-  for (let i = 0; i < 400; i++) {
+function createAppleCandidate(occupied) {
+  for (let i = 0; i < 500; i++) {
     const candidate = {
+      id: nextAppleId++,
       x: Math.random() * FIELD_COLS,
       y: Math.random() * FIELD_ROWS,
     };
     if (!occupied.has(keyOf(candidate)) && distance(candidate, state.head) > APPLE_EAT_RADIUS_CELLS + 2) {
-      state.apple = candidate;
-      return;
+      occupied.add(keyOf(candidate));
+      return candidate;
     }
   }
-  state.apple = { x: 0, y: 0 };
+  return { id: nextAppleId++, x: 0, y: 0 };
+}
+
+function placeAppleSet() {
+  const occupied = new Set(state.segments.map(keyOf));
+  state.apples = Array.from({ length: APPLE_SET_SIZE }, () => createAppleCandidate(occupied));
+}
+
+function collectApple(index) {
+  state.apples.splice(index, 1);
+  state.applesEaten += 1;
+  state.level += 1;
+  state.lastEvent = "apple";
+  state.screenShakeMs = SCREEN_SHAKE_DURATION_MS;
+  if (state.applesEaten % APPLE_SET_SIZE === 0) {
+    state.speedMultiplier *= SPEED_GROWTH_FACTOR;
+    placeAppleSet();
+  }
+  playAppleSound();
+  rebuildSegmentsFromTrail();
 }
 
 function sampleTrailAt(distanceFromHead) {
@@ -415,7 +470,7 @@ function moveSnakeContinuous(deltaMs) {
   state.headingAngle = normalizeAngle(state.headingAngle + Math.max(-maxTurn, Math.min(maxTurn, angleDelta)));
 
   const direction = angleToVector(state.headingAngle);
-  const distanceThisFrame = SPEED_CELLS_PER_SECOND * deltaSeconds;
+  const distanceThisFrame = currentSpeedCellsPerSecond() * deltaSeconds;
   state.head.x += direction.x * distanceThisFrame;
   state.head.y += direction.y * distanceThisFrame;
 
@@ -426,19 +481,21 @@ function moveSnakeContinuous(deltaMs) {
   recordHeadInTrail();
   rebuildSegmentsFromTrail();
 
-  if (isAppleInEatRange()) {
-    state.applesEaten += 1;
-    state.level += 1;
-    state.lastEvent = "apple";
-    playAppleSound();
-    rebuildSegmentsFromTrail();
-    placeApple();
+  const appleIndex = eatenAppleIndex();
+  if (appleIndex >= 0) {
+    collectApple(appleIndex);
   }
 }
 
-function updateGame(deltaMs) {
-  if (state.mode !== "playing") return;
+function updateEffects(deltaMs) {
+  state.elapsedMs += deltaMs;
   state.bounceTimer = Math.max(0, state.bounceTimer - deltaMs);
+  state.screenShakeMs = Math.max(0, state.screenShakeMs - deltaMs);
+}
+
+function updateGame(deltaMs) {
+  updateEffects(deltaMs);
+  if (state.mode !== "playing") return;
 
   let remaining = deltaMs;
   while (remaining > 0) {
@@ -450,8 +507,8 @@ function updateGame(deltaMs) {
 
 function worldToScreen(cell, width, height) {
   return {
-    x: width / 2 + (cell.x - state.head.x) * CELL_SIZE,
-    y: height / 2 + (cell.y - state.head.y) * CELL_SIZE,
+    x: width / 2 + (cell.x - state.head.x) * CELL_SIZE + renderShakeOffset.x,
+    y: height / 2 + (cell.y - state.head.y) * CELL_SIZE + renderShakeOffset.y,
   };
 }
 
@@ -485,27 +542,196 @@ function backgroundBounds(width, height) {
 }
 
 function renderGameToText() {
+  const nearestAppleDistance = nearestAppleDistanceFromHead();
   const payload = {
     coordinateSystem: "continuous field coordinates; origin top-left; x right, y down; viewport keeps snake head at screen center",
     mode: state.mode,
+    menuVariant: state.menuVariant,
     field: { cols: FIELD_COLS, rows: FIELD_ROWS },
     movement: {
-      speedCellsPerSecond: SPEED_CELLS_PER_SECOND,
+      baseSpeedCellsPerSecond: BASE_SPEED_CELLS_PER_SECOND,
+      speedMultiplier: Number(state.speedMultiplier.toFixed(4)),
+      speedCellsPerSecond: Number(currentSpeedCellsPerSecond().toFixed(3)),
       headingDegrees: Number(((normalizeAngle(state.headingAngle) * 180) / Math.PI).toFixed(1)),
       targetDegrees: Number(((normalizeAngle(state.targetAngle) * 180) / Math.PI).toFixed(1)),
     },
     appleEatRadiusCells: APPLE_EAT_RADIUS_CELLS,
-    appleDistanceCells: Number(appleDistanceFromHead().toFixed(2)),
+    appleDistanceCells: nearestAppleDistance === null ? null : Number(nearestAppleDistance.toFixed(2)),
     level: state.level,
     length: state.segments.length,
     bodySize: bodySize(),
     direction: directionLabel(state.headingAngle),
     head: { x: Number(state.head.x.toFixed(2)), y: Number(state.head.y.toFixed(2)) },
-    apple: { x: Number(state.apple.x.toFixed(2)), y: Number(state.apple.y.toFixed(2)) },
+    apples: state.apples.map((apple) => ({
+      id: apple.id,
+      x: Number(apple.x.toFixed(2)),
+      y: Number(apple.y.toFixed(2)),
+    })),
+    activeAppleCount: activeApples().length,
     applesEaten: state.applesEaten,
+    speedMultiplier: Number(state.speedMultiplier.toFixed(4)),
+    speedCellsPerSecond: Number(currentSpeedCellsPerSecond().toFixed(3)),
+    rainEnabled: state.rainEnabled,
+    screenShakeMs: Math.round(state.screenShakeMs),
     lastEvent: state.lastEvent,
   };
   return JSON.stringify(payload, null, 2);
+}
+
+function updateMenuVariant() {
+  if (state.mode === "menu") state.menuVariant = "start";
+  if (state.mode === "paused") state.menuVariant = "pause";
+  if (state.mode === "exitConfirm") {
+    state.menuVariant = state.modeBeforeConfirm === "paused" ? "pause" : "start";
+  }
+  if (state.mode === "playing" || state.mode === "exited") state.menuVariant = null;
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  updateMenuVariant();
+  updateGameUi();
+}
+
+function startOrResumeGame() {
+  startGameAudio();
+  state.pointerControl.active = false;
+  state.pointerControl.pointerId = null;
+  state.lastEvent = state.mode === "paused" ? "resumed" : "started";
+  setMode("playing");
+}
+
+function pauseGame() {
+  if (state.mode !== "playing") return;
+  state.lastEvent = "paused";
+  setMode("paused");
+}
+
+function requestExitConfirmation() {
+  state.modeBeforeConfirm = state.mode === "paused" ? "paused" : "menu";
+  state.lastEvent = "exit-confirm";
+  setMode("exitConfirm");
+}
+
+function cancelExitConfirmation() {
+  state.lastEvent = "exit-cancelled";
+  setMode(state.modeBeforeConfirm === "paused" ? "paused" : "menu");
+}
+
+function confirmExit() {
+  state.lastEvent = "exit-confirmed";
+  const payload = JSON.stringify({ type: "exit_app" });
+  if (window.ReactNativeWebView?.postMessage) {
+    window.ReactNativeWebView.postMessage(payload);
+  }
+  setMode("exited");
+}
+
+function ensureGameUi() {
+  if (uiElements) return uiElements;
+  const shell = document.getElementById("game-shell") ?? document.body;
+
+  const pauseButton = document.createElement("button");
+  pauseButton.type = "button";
+  pauseButton.className = "pause-button";
+  pauseButton.textContent = "II";
+  pauseButton.setAttribute("aria-label", "게임 일시정지");
+  pauseButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    startGameAudio();
+    pauseGame();
+  });
+
+  const overlay = document.createElement("section");
+  overlay.className = "game-menu";
+  overlay.setAttribute("aria-live", "polite");
+
+  const panel = document.createElement("div");
+  panel.className = "game-menu__panel";
+
+  const title = document.createElement("h1");
+  title.className = "game-menu__title";
+  title.textContent = "모험 스네이크";
+
+  const primaryButton = document.createElement("button");
+  primaryButton.type = "button";
+  primaryButton.className = "retro-button retro-button--primary";
+  primaryButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    startOrResumeGame();
+  });
+
+  const exitButton = document.createElement("button");
+  exitButton.type = "button";
+  exitButton.className = "retro-button";
+  exitButton.textContent = "게임 종료";
+  exitButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    startGameAudio();
+    requestExitConfirmation();
+  });
+
+  panel.append(title, primaryButton, exitButton);
+  overlay.append(panel);
+
+  const confirm = document.createElement("section");
+  confirm.className = "exit-confirm";
+  confirm.setAttribute("aria-live", "assertive");
+
+  const confirmPanel = document.createElement("div");
+  confirmPanel.className = "exit-confirm__panel";
+
+  const confirmText = document.createElement("p");
+  confirmText.className = "exit-confirm__text";
+  confirmText.textContent = "정말 나가시겠습니까?";
+
+  const confirmActions = document.createElement("div");
+  confirmActions.className = "exit-confirm__actions";
+
+  const yesButton = document.createElement("button");
+  yesButton.type = "button";
+  yesButton.className = "retro-button retro-button--small retro-button--primary";
+  yesButton.textContent = "예";
+  yesButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    confirmExit();
+  });
+
+  const noButton = document.createElement("button");
+  noButton.type = "button";
+  noButton.className = "retro-button retro-button--small";
+  noButton.textContent = "아니오";
+  noButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    cancelExitConfirmation();
+  });
+
+  confirmActions.append(yesButton, noButton);
+  confirmPanel.append(confirmText, confirmActions);
+  confirm.append(confirmPanel);
+
+  const exited = document.createElement("section");
+  exited.className = "exited-screen";
+  exited.textContent = "게임을 종료했습니다.";
+
+  shell.append(pauseButton, overlay, confirm, exited);
+  uiElements = { shell, pauseButton, overlay, primaryButton, exitButton, confirm, exited };
+  updateGameUi();
+  return uiElements;
+}
+
+function updateGameUi() {
+  if (!uiElements) return;
+  const isMenuVisible = state.mode === "menu" || state.mode === "paused";
+  const isConfirmVisible = state.mode === "exitConfirm";
+  const isExited = state.mode === "exited";
+
+  uiElements.shell.classList.toggle("is-blurred", isMenuVisible || isConfirmVisible || isExited);
+  uiElements.overlay.classList.toggle("is-visible", isMenuVisible);
+  uiElements.confirm.classList.toggle("is-visible", isConfirmVisible);
+  uiElements.exited.classList.toggle("is-visible", isExited);
+  uiElements.pauseButton.classList.toggle("is-visible", state.mode === "playing");
+  uiElements.primaryButton.textContent = state.menuVariant === "pause" ? "계속하기" : "게임 시작";
 }
 
 class SnakeScene extends Phaser.Scene {
@@ -519,6 +745,8 @@ class SnakeScene extends Phaser.Scene {
 
   create() {
     sceneRef = this;
+    ensureGameUi();
+    this.rainParticles = [];
     this.backgroundImage = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0, 0);
     this.graphics = this.add.graphics();
     this.hudText = this.add.text(18, 16, "", {
@@ -534,6 +762,7 @@ class SnakeScene extends Phaser.Scene {
     }).setScrollFactor(0);
     this.input.on("pointerdown", (pointer) => {
       startGameAudio();
+      if (state.mode !== "playing") return;
       state.pointerControl.active = true;
       state.pointerControl.pointerId = pointer.id;
       applyPointerDirection(pointer, this.scale.width, this.scale.height);
@@ -558,12 +787,70 @@ class SnakeScene extends Phaser.Scene {
 
   update(_time, delta) {
     updateGame(delta);
+    this.updateRain(delta, this.scale.width, this.scale.height);
     this.draw();
   }
 
   manualAdvance(ms) {
     updateGame(ms);
+    this.updateRain(ms, this.scale.width, this.scale.height);
     this.draw();
+  }
+
+  ensureRain(width, height) {
+    const targetCount = Math.max(28, Math.round(width * height * RAIN_PARTICLE_DENSITY));
+    while (this.rainParticles.length < targetCount) {
+      this.rainParticles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        length: 7 + Math.random() * 14,
+        speed: 90 + Math.random() * 120,
+        drift: -16 + Math.random() * 12,
+        alpha: 0.22 + Math.random() * 0.34,
+      });
+    }
+    if (this.rainParticles.length > targetCount) {
+      this.rainParticles.length = targetCount;
+    }
+  }
+
+  updateRain(deltaMs, width, height) {
+    if (!state.rainEnabled) return;
+    this.ensureRain(width, height);
+    const deltaSeconds = deltaMs / 1000;
+    this.rainParticles.forEach((drop) => {
+      drop.x += drop.drift * deltaSeconds;
+      drop.y += drop.speed * deltaSeconds;
+      if (drop.y > height + drop.length || drop.x < -30) {
+        drop.x = Math.random() * (width + 60);
+        drop.y = -drop.length - Math.random() * height * 0.16;
+      }
+    });
+  }
+
+  drawRain(width, height) {
+    if (!state.rainEnabled) return;
+    this.ensureRain(width, height);
+    this.rainParticles.forEach((drop, index) => {
+      const x = Math.round(drop.x) + (index % 3);
+      const y = Math.round(drop.y);
+      this.graphics.lineStyle(2, 0x9fe7ff, drop.alpha);
+      this.graphics.lineBetween(x, y, x + drop.drift * 0.035, y + drop.length);
+      if (index % 7 === 0) {
+        this.graphics.lineStyle(1, 0xf4f0d4, drop.alpha * 0.42);
+        this.graphics.lineBetween(x + 1, y + 1, x + 1, y + Math.max(3, drop.length * 0.42));
+      }
+    });
+  }
+
+  screenShakeOffset() {
+    if (state.screenShakeMs <= 0) return { x: 0, y: 0 };
+    const progress = state.screenShakeMs / SCREEN_SHAKE_DURATION_MS;
+    const strength = 7 * progress;
+    return {
+      x: Math.sin(state.elapsedMs * 0.11) * strength,
+      y: Math.cos(state.elapsedMs * 0.17) * strength * 0.72,
+    };
   }
 
   drawBackground(width, height) {
@@ -603,6 +890,7 @@ class SnakeScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     const size = bodySize();
+    renderShakeOffset = this.screenShakeOffset();
     this.graphics.clear();
     this.cameras.main.setBackgroundColor("#171b45");
     this.drawBackground(width, height);
@@ -614,11 +902,13 @@ class SnakeScene extends Phaser.Scene {
       this.graphics.fillCircle(state.pointerControl.x, state.pointerControl.y, Math.max(14, size * 0.9));
     }
 
-    const apple = worldToScreen(state.apple, width, height);
-    this.graphics.fillStyle(0xff5a5f, 1);
-    this.graphics.fillCircle(apple.x, apple.y, Math.max(7, size * 0.48));
-    this.graphics.fillStyle(0xffc76e, 1);
-    this.graphics.fillEllipse(apple.x + 4, apple.y - 8, 8, 4);
+    state.apples.forEach((appleCell) => {
+      const apple = worldToScreen(appleCell, width, height);
+      this.graphics.fillStyle(0xff5a5f, 1);
+      this.graphics.fillCircle(apple.x, apple.y, Math.max(7, size * 0.48));
+      this.graphics.fillStyle(0xffc76e, 1);
+      this.graphics.fillEllipse(apple.x + 4, apple.y - 8, 8, 4);
+    });
 
     state.segments.forEach((segment, index) => {
       const pos = worldToScreen(segment, width, height);
@@ -630,11 +920,16 @@ class SnakeScene extends Phaser.Scene {
 
     const headPulse = state.bounceTimer > 0 ? 0xffc76e : 0xe8fff4;
     this.graphics.lineStyle(3, headPulse, 1);
-    this.graphics.strokeCircle(width / 2, height / 2, size * 0.72);
+    this.graphics.strokeCircle(width / 2 + renderShakeOffset.x, height / 2 + renderShakeOffset.y, size * 0.72);
 
-    this.hudText.setText(`Lv ${state.level}  Length ${state.segments.length}  Apples ${state.applesEaten}`);
+    this.drawRain(width, height);
+
+    this.hudText.setText(
+      `Lv ${state.level}  Length ${state.segments.length}  Apples ${state.applesEaten}  x${state.speedMultiplier.toFixed(2)}`
+    );
     this.hintText.setY(height - 34);
-    this.hintText.setText("손가락이나 마우스를 누른 채 드래그해서 방향 조절");
+    this.hintText.setText(state.mode === "playing" ? "손가락이나 마우스를 누른 채 드래그해서 방향 조절" : "비 내리는 골목에서 시작을 기다리는 중");
+    renderShakeOffset = { x: 0, y: 0 };
   }
 }
 
@@ -661,6 +956,14 @@ window.advanceTime = (ms) => {
 };
 window.__snake_state = state;
 window.__snake_audio = audioState;
+window.__snake_controls = {
+  start: startOrResumeGame,
+  pause: pauseGame,
+  requestExit: requestExitConfirmation,
+  cancelExit: cancelExitConfirmation,
+  confirmExit,
+  placeAppleSet,
+};
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
@@ -675,3 +978,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("focus", resumeAudio);
+
+window.setTimeout(() => {
+  startGameAudio();
+}, 250);
