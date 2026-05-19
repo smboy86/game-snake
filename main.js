@@ -5,6 +5,8 @@ const BASE_SPEED_CELLS_PER_SECOND = 6;
 const TURN_RATE_RADIANS_PER_SECOND = Math.PI * 1.45;
 const BODY_SPACING_CELLS = 0.85;
 const APPLE_SET_SIZE = 3;
+const INITIAL_ACTIVE_APPLE_COUNT = 3;
+const WIN_APPLE_COUNT = 50;
 const APPLE_EAT_RADIUS_CELLS = 3;
 const BASE_BODY_SIZE = 12;
 const BODY_GROWTH_PER_LEVEL = 1;
@@ -12,6 +14,7 @@ const MAX_BODY_SIZE = 26;
 const MAX_UPDATE_STEP_MS = 1000 / 60;
 const SPEED_GROWTH_FACTOR = 1.3;
 const SCREEN_SHAKE_DURATION_MS = 180;
+const EXIT_APP_DELAY_MS = 3000;
 const RAIN_PARTICLE_DENSITY = 0.00018;
 const TWO_PI = Math.PI * 2;
 const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
@@ -47,7 +50,14 @@ const state = {
   ],
   rainEnabled: true,
   lastEvent: "menu",
+  exitTimerId: null,
 };
+
+const initialApplePositions = [
+  { id: 1, x: 31, y: 25 },
+  { id: 2, x: 22, y: 30 },
+  { id: 3, x: 28, y: 18 },
+];
 
 let sceneRef = null;
 let renderShakeOffset = { x: 0, y: 0 };
@@ -334,9 +344,33 @@ function createAppleCandidate(occupied) {
   return { id: nextAppleId++, x: 0, y: 0 };
 }
 
-function placeAppleSet() {
+function placeAppleSet(count = INITIAL_ACTIVE_APPLE_COUNT) {
   const occupied = new Set(state.segments.map(keyOf));
-  state.apples = Array.from({ length: APPLE_SET_SIZE }, () => createAppleCandidate(occupied));
+  state.apples = Array.from({ length: count }, () => createAppleCandidate(occupied));
+}
+
+function resetGameState() {
+  state.mode = "menu";
+  state.menuVariant = "start";
+  state.modeBeforeConfirm = "menu";
+  state.level = 1;
+  state.applesEaten = 0;
+  state.speedMultiplier = 1;
+  state.headingAngle = 0;
+  state.targetAngle = 0;
+  state.pointerControl.active = false;
+  state.pointerControl.pointerId = null;
+  state.pointerControl.x = 0;
+  state.pointerControl.y = 0;
+  state.bounceTimer = 0;
+  state.screenShakeMs = 0;
+  state.head = { x: 25, y: 25 };
+  state.trail = [{ x: 25, y: 25 }];
+  state.segments = [{ x: 25, y: 25 }];
+  state.apples = initialApplePositions.map((apple) => ({ ...apple }));
+  state.rainEnabled = true;
+  state.lastEvent = "reset";
+  nextAppleId = 4;
 }
 
 function collectApple(index) {
@@ -345,9 +379,15 @@ function collectApple(index) {
   state.level += 1;
   state.lastEvent = "apple";
   state.screenShakeMs = SCREEN_SHAKE_DURATION_MS;
-  if (state.applesEaten % APPLE_SET_SIZE === 0) {
-    state.speedMultiplier *= SPEED_GROWTH_FACTOR;
+  if (state.applesEaten >= WIN_APPLE_COUNT) {
+    finishGame();
+  } else if (state.apples.length === 0) {
+    if (state.applesEaten % APPLE_SET_SIZE === 0) {
+      state.speedMultiplier *= SPEED_GROWTH_FACTOR;
+    }
     placeAppleSet();
+  } else if (state.applesEaten % APPLE_SET_SIZE === 0) {
+    state.speedMultiplier *= SPEED_GROWTH_FACTOR;
   }
   playAppleSound();
   rebuildSegmentsFromTrail();
@@ -547,6 +587,7 @@ function backgroundBounds(width, height) {
 
 function renderGameToText() {
   const nearestAppleDistance = nearestAppleDistanceFromHead();
+  const remainingTargetApples = Math.max(0, WIN_APPLE_COUNT - state.applesEaten);
   const payload = {
     coordinateSystem: "continuous field coordinates; origin top-left; x right, y down; viewport keeps snake head at screen center",
     mode: state.mode,
@@ -574,6 +615,8 @@ function renderGameToText() {
     })),
     activeAppleCount: activeApples().length,
     applesEaten: state.applesEaten,
+    targetApples: WIN_APPLE_COUNT,
+    remainingTargetApples,
     speedMultiplier: Number(state.speedMultiplier.toFixed(4)),
     speedCellsPerSecond: Number(currentSpeedCellsPerSecond().toFixed(3)),
     rainEnabled: state.rainEnabled,
@@ -589,7 +632,7 @@ function updateMenuVariant() {
   if (state.mode === "exitConfirm") {
     state.menuVariant = state.modeBeforeConfirm === "paused" ? "pause" : "start";
   }
-  if (state.mode === "playing" || state.mode === "exited") state.menuVariant = null;
+  if (state.mode === "playing" || state.mode === "ending" || state.mode === "exited") state.menuVariant = null;
 }
 
 function setMode(mode) {
@@ -606,6 +649,11 @@ function startOrResumeGame() {
   setMode("playing");
 }
 
+function restartGame() {
+  resetGameState();
+  startOrResumeGame();
+}
+
 function pauseGame() {
   if (state.mode !== "playing") return;
   state.lastEvent = "paused";
@@ -613,23 +661,41 @@ function pauseGame() {
 }
 
 function requestExitConfirmation() {
-  state.modeBeforeConfirm = state.mode === "paused" ? "paused" : "menu";
+  state.modeBeforeConfirm = state.mode === "paused" || state.mode === "ending" ? state.mode : "menu";
   state.lastEvent = "exit-confirm";
   setMode("exitConfirm");
 }
 
 function cancelExitConfirmation() {
   state.lastEvent = "exit-cancelled";
-  setMode(state.modeBeforeConfirm === "paused" ? "paused" : "menu");
+  if (state.modeBeforeConfirm === "paused" || state.modeBeforeConfirm === "ending") {
+    setMode(state.modeBeforeConfirm);
+    return;
+  }
+  setMode("menu");
+}
+
+function finishGame() {
+  state.pointerControl.active = false;
+  state.pointerControl.pointerId = null;
+  state.lastEvent = "ending";
+  pauseAudio();
+  setMode("ending");
 }
 
 function confirmExit() {
+  if (state.exitTimerId !== null) return;
   state.lastEvent = "exit-confirmed";
-  const payload = JSON.stringify({ type: "exit_app" });
-  if (window.ReactNativeWebView?.postMessage) {
-    window.ReactNativeWebView.postMessage(payload);
-  }
   setMode("exited");
+  pauseAudio();
+
+  state.exitTimerId = window.setTimeout(() => {
+    state.exitTimerId = null;
+    const payload = JSON.stringify({ type: "exit_app" });
+    if (window.ReactNativeWebView?.postMessage) {
+      window.ReactNativeWebView.postMessage(payload);
+    }
+  }, EXIT_APP_DELAY_MS);
 }
 
 function ensureGameUi() {
@@ -715,12 +781,45 @@ function ensureGameUi() {
   confirmPanel.append(confirmText, confirmActions);
   confirm.append(confirmPanel);
 
+  const ending = document.createElement("section");
+  ending.className = "ending-screen";
+  ending.setAttribute("aria-live", "assertive");
+
+  const endingPanel = document.createElement("div");
+  endingPanel.className = "game-menu__panel ending-screen__panel";
+
+  const endingText = document.createElement("p");
+  endingText.className = "ending-screen__text";
+  endingText.textContent =
+    "배고픔에 지쳐 있는 작은 뱀이\n용케 사과를 모두 먹고 힘을 모았어요\n이제 눅눅한 골목길을 떠나\n더 넓은 세상으로 나아갑니다";
+
+  const restartButton = document.createElement("button");
+  restartButton.type = "button";
+  restartButton.className = "retro-button retro-button--primary";
+  restartButton.textContent = "게임 다시 시작";
+  restartButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    restartGame();
+  });
+
+  const endingExitButton = document.createElement("button");
+  endingExitButton.type = "button";
+  endingExitButton.className = "retro-button";
+  endingExitButton.textContent = "게임 종료";
+  endingExitButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    requestExitConfirmation();
+  });
+
+  endingPanel.append(endingText, restartButton, endingExitButton);
+  ending.append(endingPanel);
+
   const exited = document.createElement("section");
   exited.className = "exited-screen";
-  exited.textContent = "게임을 종료했습니다.";
+  exited.textContent = "게임을 종료합니다.";
 
-  shell.append(pauseButton, overlay, confirm, exited);
-  uiElements = { shell, pauseButton, overlay, primaryButton, exitButton, confirm, exited };
+  shell.append(pauseButton, overlay, confirm, ending, exited);
+  uiElements = { shell, pauseButton, overlay, primaryButton, exitButton, confirm, ending, exited };
   updateGameUi();
   return uiElements;
 }
@@ -729,11 +828,13 @@ function updateGameUi() {
   if (!uiElements) return;
   const isMenuVisible = state.mode === "menu" || state.mode === "paused";
   const isConfirmVisible = state.mode === "exitConfirm";
+  const isEnding = state.mode === "ending";
   const isExited = state.mode === "exited";
 
-  uiElements.shell.classList.toggle("is-blurred", isMenuVisible || isConfirmVisible || isExited);
+  uiElements.shell.classList.toggle("is-blurred", isMenuVisible || isConfirmVisible || isEnding || isExited);
   uiElements.overlay.classList.toggle("is-visible", isMenuVisible);
   uiElements.confirm.classList.toggle("is-visible", isConfirmVisible);
+  uiElements.ending.classList.toggle("is-visible", isEnding);
   uiElements.exited.classList.toggle("is-visible", isExited);
   uiElements.pauseButton.classList.toggle("is-visible", state.mode === "playing");
   uiElements.primaryButton.textContent = state.menuVariant === "pause" ? "계속하기" : "게임 시작";
@@ -909,9 +1010,16 @@ class SnakeScene extends Phaser.Scene {
 
     state.apples.forEach((appleCell) => {
       const apple = worldToScreen(appleCell, width, height);
-      this.graphics.fillStyle(0xff5a5f, 1);
-      this.graphics.fillCircle(apple.x, apple.y, Math.max(7, size * 0.48));
-      this.graphics.fillStyle(0xffc76e, 1);
+      const appleRadius = Math.max(7, size * 0.48);
+      this.graphics.fillStyle(0xb4464d, 1);
+      this.graphics.fillCircle(apple.x, apple.y, appleRadius);
+      this.graphics.fillStyle(0x7c3d43, 0.42);
+      this.graphics.fillCircle(apple.x - 1, apple.y + 2, appleRadius * 0.17);
+      this.graphics.fillStyle(0x935057, 1);
+      this.graphics.fillCircle(apple.x - appleRadius + 1, apple.y - 3, 2);
+      this.graphics.fillCircle(apple.x - appleRadius + 1, apple.y + 3, 2);
+      this.graphics.fillCircle(apple.x - appleRadius + 4, apple.y, 1.5);
+      this.graphics.fillStyle(0x8a6b3d, 1);
       this.graphics.fillEllipse(apple.x + 4, apple.y - 8, 8, 4);
     });
 
@@ -929,11 +1037,10 @@ class SnakeScene extends Phaser.Scene {
 
     this.drawRain(width, height);
 
-    this.hudText.setText(
-      `Lv ${state.level}  Length ${state.segments.length}  Apples ${state.applesEaten}  x${state.speedMultiplier.toFixed(2)}`
-    );
+    const remainingTargetApples = Math.max(0, WIN_APPLE_COUNT - state.applesEaten);
+    this.hudText.setText(`목표 사과: ${remainingTargetApples}개`);
     this.hintText.setY(height - 34);
-    this.hintText.setText(state.mode === "playing" ? "손가락이나 마우스를 누른 채 드래그해서 방향 조절" : "비 내리는 골목에서 시작을 기다리는 중");
+    this.hintText.setText(state.mode === "playing" ? "손가락이나 터치를 이용해 누른 채 방향전환 가능" : "비 내리는 골목에서 시작을 기다리는 중");
     renderShakeOffset = { x: 0, y: 0 };
   }
 }
@@ -967,6 +1074,8 @@ window.__snake_controls = {
   requestExit: requestExitConfirmation,
   cancelExit: cancelExitConfirmation,
   confirmExit,
+  restart: restartGame,
+  finish: finishGame,
   placeAppleSet,
 };
 

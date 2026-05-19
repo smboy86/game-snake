@@ -62,6 +62,7 @@ canvas {
 
 .game-menu,
 .exit-confirm,
+.ending-screen,
 .exited-screen {
   position: fixed;
   inset: 0;
@@ -75,6 +76,7 @@ canvas {
 
 .game-menu.is-visible,
 .exit-confirm.is-visible,
+.ending-screen.is-visible,
 .exited-screen.is-visible {
   display: flex;
 }
@@ -144,6 +146,7 @@ canvas {
 }
 
 .exit-confirm__text,
+.ending-screen__text,
 .exited-screen {
   color: #f4f0d4;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -152,6 +155,21 @@ canvas {
   line-height: 1.35;
   text-align: center;
   text-shadow: 0 3px 0 #06081f;
+}
+
+.ending-screen {
+  z-index: 15;
+  background: rgba(5, 7, 22, 0.68);
+}
+
+.ending-screen__panel {
+  width: min(84vw, 360px);
+}
+
+.ending-screen__text {
+  margin: 0 0 8px;
+  font-size: clamp(16px, 4.1vw, 22px);
+  white-space: pre-line;
 }
 
 .exit-confirm__actions {
