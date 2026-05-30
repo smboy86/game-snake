@@ -15,6 +15,7 @@ const MAX_UPDATE_STEP_MS = 1000 / 60;
 const SPEED_GROWTH_FACTOR = 1.3;
 const SCREEN_SHAKE_DURATION_MS = 180;
 const EXIT_APP_DELAY_MS = 3000;
+const ENDING_ACTION_DELAY_MS = 5000;
 const RAIN_PARTICLE_DENSITY = 0.00018;
 const TWO_PI = Math.PI * 2;
 const BGM_SOURCE = window.__snake_assets?.bgm ?? "assets/audio/music/bgm.mp3";
@@ -40,6 +41,10 @@ const state = {
   bounceTimer: 0,
   screenShakeMs: 0,
   elapsedMs: 0,
+  playTimeMs: 0,
+  finalPlayTimeMs: 0,
+  endingElapsedMs: 0,
+  endingActionsVisible: false,
   head: { x: 25, y: 25 },
   trail: [{ x: 25, y: 25 }],
   segments: [{ x: 25, y: 25 }],
@@ -364,6 +369,10 @@ function resetGameState() {
   state.pointerControl.y = 0;
   state.bounceTimer = 0;
   state.screenShakeMs = 0;
+  state.playTimeMs = 0;
+  state.finalPlayTimeMs = 0;
+  state.endingElapsedMs = 0;
+  state.endingActionsVisible = false;
   state.head = { x: 25, y: 25 };
   state.trail = [{ x: 25, y: 25 }];
   state.segments = [{ x: 25, y: 25 }];
@@ -371,6 +380,14 @@ function resetGameState() {
   state.rainEnabled = true;
   state.lastEvent = "reset";
   nextAppleId = 4;
+}
+
+function formatPlayTime(ms) {
+  const safeMs = Math.max(0, Math.floor(ms));
+  const minutes = Math.floor(safeMs / 60000);
+  const seconds = Math.floor((safeMs % 60000) / 1000);
+  const milliseconds = safeMs % 1000;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}:${String(milliseconds).padStart(3, "0")}`;
 }
 
 function collectApple(index) {
@@ -533,6 +550,16 @@ function moveSnakeContinuous(deltaMs) {
 
 function updateEffects(deltaMs) {
   state.elapsedMs += deltaMs;
+  if (state.mode === "playing") {
+    state.playTimeMs += deltaMs;
+  }
+  if (state.mode === "ending" && !state.endingActionsVisible) {
+    state.endingElapsedMs += deltaMs;
+    if (state.endingElapsedMs >= ENDING_ACTION_DELAY_MS) {
+      state.endingActionsVisible = true;
+      updateGameUi();
+    }
+  }
   state.bounceTimer = Math.max(0, state.bounceTimer - deltaMs);
   state.screenShakeMs = Math.max(0, state.screenShakeMs - deltaMs);
 }
@@ -543,6 +570,7 @@ function updateGame(deltaMs) {
 
   let remaining = deltaMs;
   while (remaining > 0) {
+    if (state.mode !== "playing") break;
     const step = Math.min(MAX_UPDATE_STEP_MS, remaining);
     moveSnakeContinuous(step);
     remaining -= step;
@@ -617,6 +645,12 @@ function renderGameToText() {
     applesEaten: state.applesEaten,
     targetApples: WIN_APPLE_COUNT,
     remainingTargetApples,
+    playTimeMs: Math.floor(state.playTimeMs),
+    playTimeText: formatPlayTime(state.playTimeMs),
+    finalPlayTimeMs: Math.floor(state.finalPlayTimeMs),
+    finalPlayTimeText: formatPlayTime(state.finalPlayTimeMs),
+    endingElapsedMs: Math.floor(state.endingElapsedMs),
+    endingActionsVisible: state.endingActionsVisible,
     speedMultiplier: Number(state.speedMultiplier.toFixed(4)),
     speedCellsPerSecond: Number(currentSpeedCellsPerSecond().toFixed(3)),
     rainEnabled: state.rainEnabled,
@@ -678,6 +712,9 @@ function cancelExitConfirmation() {
 function finishGame() {
   state.pointerControl.active = false;
   state.pointerControl.pointerId = null;
+  state.finalPlayTimeMs = state.playTimeMs;
+  state.endingElapsedMs = 0;
+  state.endingActionsVisible = false;
   state.lastEvent = "ending";
   pauseAudio();
   setMode("ending");
@@ -722,7 +759,7 @@ function ensureGameUi() {
 
   const title = document.createElement("h1");
   title.className = "game-menu__title";
-  title.textContent = "모험 스네이크";
+  title.textContent = "모험-스네이크";
 
   const primaryButton = document.createElement("button");
   primaryButton.type = "button";
@@ -788,10 +825,17 @@ function ensureGameUi() {
   const endingPanel = document.createElement("div");
   endingPanel.className = "game-menu__panel ending-screen__panel";
 
+  const endingTime = document.createElement("p");
+  endingTime.className = "ending-screen__time";
+  endingTime.textContent = formatPlayTime(0);
+
   const endingText = document.createElement("p");
   endingText.className = "ending-screen__text";
   endingText.textContent =
     "배고픔에 지쳐 있는 작은 뱀이\n용케 사과를 모두 먹고 힘을 모았어요\n이제 눅눅한 골목길을 떠나\n더 넓은 세상으로 나아갑니다";
+
+  const endingActions = document.createElement("div");
+  endingActions.className = "ending-screen__actions";
 
   const restartButton = document.createElement("button");
   restartButton.type = "button";
@@ -811,7 +855,8 @@ function ensureGameUi() {
     requestExitConfirmation();
   });
 
-  endingPanel.append(endingText, restartButton, endingExitButton);
+  endingActions.append(restartButton, endingExitButton);
+  endingPanel.append(endingTime, endingText, endingActions);
   ending.append(endingPanel);
 
   const exited = document.createElement("section");
@@ -819,7 +864,18 @@ function ensureGameUi() {
   exited.textContent = "게임을 종료합니다.";
 
   shell.append(pauseButton, overlay, confirm, ending, exited);
-  uiElements = { shell, pauseButton, overlay, primaryButton, exitButton, confirm, ending, exited };
+  uiElements = {
+    shell,
+    pauseButton,
+    overlay,
+    primaryButton,
+    exitButton,
+    confirm,
+    ending,
+    endingTime,
+    endingActions,
+    exited,
+  };
   updateGameUi();
   return uiElements;
 }
@@ -838,6 +894,9 @@ function updateGameUi() {
   uiElements.exited.classList.toggle("is-visible", isExited);
   uiElements.pauseButton.classList.toggle("is-visible", state.mode === "playing");
   uiElements.primaryButton.textContent = state.menuVariant === "pause" ? "계속하기" : "게임 시작";
+  uiElements.endingTime.textContent = formatPlayTime(state.finalPlayTimeMs);
+  uiElements.endingActions.classList.toggle("is-visible", isEnding && state.endingActionsVisible);
+  uiElements.endingActions.setAttribute("aria-hidden", isEnding && state.endingActionsVisible ? "false" : "true");
 }
 
 class SnakeScene extends Phaser.Scene {

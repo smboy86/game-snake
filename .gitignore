@@ -4,3 +4,7 @@ output/
 dist/
 android/
 .DS_Store
+
+credentials.json
+*.jks
+*.keystore

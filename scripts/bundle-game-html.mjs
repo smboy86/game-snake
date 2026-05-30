@@ -21,11 +21,11 @@ const html = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>모험 스네이크</title>
+    <title>모험-스네이크</title>
     <style>${styles}</style>
   </head>
   <body>
-    <main id="game-shell" aria-label="모험 스네이크">
+    <main id="game-shell" aria-label="모험-스네이크">
       <div id="game"></div>
     </main>
     <script>${phaser}</script>

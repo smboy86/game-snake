@@ -1,8 +1,8 @@
-# 모험 스네이크 PRD
+# 모험-스네이크 PRD
 
 ## 1. 게임 정체성
 
-- 게임 이름: 모험 스네이크
+- 게임 이름: 모험-스네이크
 - 장르: 모바일 전용 아케이드 / 성장형 스네이크 게임
 - 플랫폼: 모바일 웹 우선
 - 입력 방식: 터치 조작만 지원
@@ -295,7 +295,14 @@ Android 모바일 기기 실행은 Expo 앱 안에서 현재 Phaser 웹 게임�
 - 비는 메뉴, 플레이, 일시정지 상태에서 모두 분위기 효과로 유지됩니다.
 - 레퍼런스 영상보다 약 1/5 수준의 낮은 빈도로 비가 내리도록 해 플레이 시야를 가리지 않습니다.
 
-### 17.5 검증 기준
+### 17.5 엔딩 화면과 플레이 시간
 
-- `window.render_game_to_text()`는 `mode`, `apples`, `activeAppleCount`, `speedMultiplier`, `speedCellsPerSecond`, `rainEnabled`, `screenShakeMs`, `menuVariant`를 포함해야 합니다.
-- Playwright 스크린샷으로 초기 메뉴, 플레이 중 3개 사과, 사과 획득 후 흔들림/속도 상태, 비 효과, 일시정지 메뉴, 종료 확인창을 확인합니다.
+- 사과 50개를 모두 먹으면 `ending` 상태로 전환합니다.
+- 게임 시작 후 `playing` 상태에서 흐른 시간을 누적하고, 엔딩 진입 시 최종 시간을 `00:00:000` 형식으로 고정 표시합니다.
+- 최종 시간은 엔딩 화면 상단 중앙에 기존 엔딩 문구보다 약 6px 크게 표시합니다.
+- `게임 다시 시작`, `게임 종료` 버튼은 엔딩 진입 직후 숨기고, 5초가 지난 뒤 표시합니다.
+
+### 17.6 검증 기준
+
+- `window.render_game_to_text()`는 `mode`, `apples`, `activeAppleCount`, `speedMultiplier`, `speedCellsPerSecond`, `rainEnabled`, `screenShakeMs`, `menuVariant`, `finalPlayTimeText`, `endingActionsVisible`을 포함해야 합니다.
+- Playwright 스크린샷으로 초기 메뉴, 플레이 중 3개 사과, 사과 획득 후 흔들림/속도 상태, 비 효과, 일시정지 메뉴, 종료 확인창, 엔딩 버튼 지연 표시를 확인합니다.

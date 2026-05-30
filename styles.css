@@ -164,12 +164,34 @@ canvas {
 
 .ending-screen__panel {
   width: min(84vw, 360px);
+  gap: 20px;
+}
+
+.ending-screen__time {
+  margin: 0;
+  color: #f8ffe8;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 4px 0 #06081f, 0 0 16px rgba(255, 199, 110, 0.46);
 }
 
 .ending-screen__text {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: clamp(16px, 4.1vw, 22px);
   white-space: pre-line;
+}
+
+.ending-screen__actions {
+  display: none;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ending-screen__actions.is-visible {
+  display: flex;
 }
 
 .exit-confirm__actions {

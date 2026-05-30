@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "Snake Game",
+    "name": "모험-스네이크",
     "slug": "game-snake",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "icon": "./assets/images/icons/android-icon-preview.png",
     "android": {
-      "package": "com.smboy86.gamesnake",
+      "package": "com.naldaworks.game.snake",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icons/android-icon-foreground.png",
         "backgroundImage": "./assets/images/icons/android-icon-background.png",
@@ -16,7 +18,10 @@
       }
     },
     "extra": {
-      "gameRuntime": "webview"
+      "gameRuntime": "webview",
+      "eas": {
+        "projectId": "69a0c991-b5ac-445a-b035-f729ed15cda7"
+      }
     }
   }
 }
